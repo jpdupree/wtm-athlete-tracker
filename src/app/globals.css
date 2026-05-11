@@ -83,6 +83,12 @@ html:not([data-theme="light"]) .wtm-logo-light { display: none; }
 /* Print: force a clean light layout so race-day handoffs don't waste
    ink on the dark theme, give the page a usable width on Letter/A4
    paper, hide UI chrome, and expand collapsed LapCards. */
+@page {
+  /* Tight margins so the content gets the full page. The browser default
+     varies from 0.5"–1"; 0.35" is reliable across Chrome / Safari / FF. */
+  margin: 0.35in;
+}
+
 @media print {
   html, body {
     background: white !important;
@@ -90,13 +96,12 @@ html:not([data-theme="light"]) .wtm-logo-light { display: none; }
   }
   body::before { display: none !important; }
 
-  /* Wider content area for paper — the on-screen max-w-md (~4.7") is
-     way too narrow for printing. ~6.5" fills a Letter page minus the
-     standard 1" margins. */
+  /* Use the full printable column. With the @page margin set above,
+     this maxes out the usable area. */
   main {
-    max-width: 6.5in !important;
-    margin: 0 auto !important;
-    padding: 0.25in 0 !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   .print-hide { display: none !important; }

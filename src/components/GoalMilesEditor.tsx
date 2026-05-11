@@ -61,8 +61,14 @@ export function GoalMilesEditor({
 
   if (!editing) {
     const targetSec = effective.sec;
+    // When the math returns a non-positive value the athlete is past
+    // pace for the goal — their projected run alone exceeds the time
+    // remaining. We still call pitStatus so the avg pit color reflects
+    // that (every pit then reads red), and we surface "behind" in the
+    // copy instead of a dash.
+    const budgetExhausted = targetSec != null && targetSec <= 0;
     const pitColorStatus =
-      targetSec != null && targetSec > 0 && avgPitSec != null
+      targetSec != null && avgPitSec != null
         ? pitStatus(avgPitSec, targetSec)
         : "none";
     const pitColor = pitColorStatus === "none" ? "" : pitStatusClass(pitColorStatus);
@@ -74,7 +80,9 @@ export function GoalMilesEditor({
           : "Pit";
     const targetSuffix =
       effective.source === "recommended" ? (
-        <span className="opacity-60"> (auto)</span>
+        <span className="opacity-60">
+          {budgetExhausted ? " (auto · behind)" : " (auto)"}
+        </span>
       ) : effective.source === "override" ? (
         <span className="opacity-60"> (set)</span>
       ) : null;
@@ -97,7 +105,11 @@ export function GoalMilesEditor({
           <p className="text-xs opacity-80 tabular-nums">
             {targetLabel}:{" "}
             <span className="font-medium">
-              {targetSec != null && targetSec > 0 ? fmtSec(Math.round(targetSec)) : "—"}
+              {targetSec != null
+                ? targetSec > 0
+                  ? fmtSec(Math.round(targetSec))
+                  : "0:00"
+                : "—"}
             </span>
             {targetSuffix}
             {avgPitSec != null && (

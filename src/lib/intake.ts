@@ -76,18 +76,24 @@ export function sumPitSec(laps: Lap[]): number {
 export type PitStatus = "green" | "amber" | "red" | "none";
 
 // Color a measured pit time relative to the athlete's goal pit time.
-// Returns "none" when no goal is set; callers should render neutral in that
-// case rather than fall back to a hardcoded threshold.
+// Returns "none" when no goal is set; callers should render neutral in
+// that case rather than fall back to a hardcoded threshold.
 //   green: at or under goal
 //   amber: over goal but within 5%
 //   red:   over goal by more than 5%
+//
+// Special case: a non-positive threshold means the budget is exhausted
+// (the athlete's projected run alone already exceeds the time remaining).
+// Every positive pit further widens the gap, so color them red rather
+// than rendering neutral — that's the honest signal.
 const PIT_AMBER_OVER = 1.05;
 
 export function pitStatus(
   pitSec: number,
   goalPitSec: number | null | undefined,
 ): PitStatus {
-  if (goalPitSec == null || goalPitSec <= 0) return "none";
+  if (goalPitSec == null) return "none";
+  if (goalPitSec <= 0) return pitSec > 0 ? "red" : "green";
   if (pitSec <= goalPitSec) return "green";
   if (pitSec <= goalPitSec * PIT_AMBER_OVER) return "amber";
   return "red";

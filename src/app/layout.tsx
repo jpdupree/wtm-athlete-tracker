@@ -3,6 +3,7 @@ import { Bebas_Neue } from "next/font/google";
 import "./globals.css";
 import { FeedProvider } from "@/components/FeedProvider";
 import { LapSyncProvider } from "@/components/LapSyncProvider";
+import { PrintReadyHook } from "@/components/PrintReadyHook";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import { RESULTS_YEAR } from "@/lib/race";
 
@@ -43,6 +44,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <LapSyncProvider>{children}</LapSyncProvider>
         </FeedProvider>
         <ServiceWorkerRegister />
+        <PrintReadyHook />
       </body>
     </html>
   );

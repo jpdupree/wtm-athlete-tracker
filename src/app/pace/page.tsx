@@ -74,9 +74,29 @@ export default function PaceCalculatorPage() {
   const lapSec = parseTime(lapStr) ?? auto.lap;
   const pitSec = parseTime(pitStr) ?? auto.pit;
 
+  // Per-lap overrides. Indexed by lap number (1..goalLaps) for laps and
+  // pit number (1..goalLaps-1) for pits. Stored as raw input strings so
+  // partial typing is allowed; empty string = "use the global value".
+  const [lapOverrides, setLapOverrides] = useState<Record<number, string>>({});
+  const [pitOverrides, setPitOverrides] = useState<Record<number, string>>({});
+
   const numPits = Math.max(0, goalLaps - 1);
-  const totalRun = goalLaps * lapSec;
-  const totalPit = numPits * pitSec;
+
+  const lapSecAt = (n: number): number => {
+    const raw = lapOverrides[n];
+    if (raw == null || raw.trim() === "") return lapSec;
+    return parseTime(raw) ?? lapSec;
+  };
+  const pitSecAt = (n: number): number => {
+    const raw = pitOverrides[n];
+    if (raw == null || raw.trim() === "") return pitSec;
+    return parseTime(raw) ?? pitSec;
+  };
+
+  let totalRun = 0;
+  for (let i = 1; i <= goalLaps; i++) totalRun += lapSecAt(i);
+  let totalPit = 0;
+  for (let i = 1; i <= numPits; i++) totalPit += pitSecAt(i);
   const totalSec = totalRun + totalPit;
   const marginSec = RACE_WINDOW_SEC - totalSec;
   const onPace = marginSec >= 0;
@@ -183,7 +203,7 @@ export default function PaceCalculatorPage() {
         style={{ border: "1px solid var(--wtm-border)", background: "var(--wtm-surface)" }}
       >
         <Row label="Total run" value={fmtHm(totalRun)} />
-        <Row label="Total pit" value={`${fmtHm(totalPit)} (${numPits} × ${fmtHm(pitSec)})`} />
+        <Row label="Total pit" value={fmtHm(totalPit)} sub={`${numPits} pit${numPits === 1 ? "" : "s"}`} />
         <Row label="Total time" value={fmtHm(totalSec)} bold />
         <Row
           label="Race window"
@@ -206,9 +226,93 @@ export default function PaceCalculatorPage() {
       <Chart
         goalLaps={goalLaps}
         goalMiles={goalMiles}
-        lapSec={lapSec}
-        pitSec={pitSec}
+        lapSecAt={lapSecAt}
+        pitSecAt={pitSecAt}
       />
+
+      <section className="space-y-2">
+        <div className="flex items-baseline justify-between">
+          <p className="text-xs uppercase tracking-wide opacity-60">
+            Per-lap plan
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setLapOverrides({});
+              setPitOverrides({});
+            }}
+            className="text-[11px] uppercase tracking-wider opacity-70 hover:opacity-100"
+            style={{ color: "var(--wtm-accent)" }}
+            disabled={
+              Object.keys(lapOverrides).length === 0 &&
+              Object.keys(pitOverrides).length === 0
+            }
+          >
+            ↺ Clear overrides
+          </button>
+        </div>
+        <p className="text-[11px] opacity-60 leading-snug">
+          Blank cells use the global lap / pit time above. Type a value
+          (H:MM:SS, MM:SS, or minutes) to override that specific lap or pit.
+        </p>
+        <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--wtm-border)" }}>
+          <div
+            className="grid grid-cols-[auto_1fr_1fr] gap-x-2 text-[10px] uppercase tracking-wide opacity-60 px-3 py-1"
+            style={{ background: "var(--wtm-surface-2)" }}
+          >
+            <span>#</span>
+            <span className="text-center">Lap (run)</span>
+            <span className="text-center">Pit (after)</span>
+          </div>
+          {Array.from({ length: goalLaps }, (_, idx) => {
+            const n = idx + 1;
+            const isLastLap = n === goalLaps;
+            const lapPh = fmtHm(lapSec);
+            const pitPh = fmtHm(pitSec);
+            return (
+              <div
+                key={n}
+                className="grid grid-cols-[auto_1fr_1fr] gap-x-2 items-center px-3 py-1.5"
+                style={{ borderTop: "1px solid var(--wtm-border)" }}
+              >
+                <span className="text-xs opacity-70 tabular-nums w-6">{n}</span>
+                <input
+                  inputMode="decimal"
+                  value={lapOverrides[n] ?? ""}
+                  onChange={(e) =>
+                    setLapOverrides((prev) => ({ ...prev, [n]: e.target.value }))
+                  }
+                  placeholder={lapPh}
+                  aria-label={`Lap ${n} time`}
+                  className="w-full rounded px-1.5 py-0.5 text-sm tabular-nums"
+                  style={{
+                    border: "1px solid var(--wtm-border)",
+                    background: lapOverrides[n] ? "var(--wtm-accent-dim)" : "transparent",
+                  }}
+                />
+                {isLastLap ? (
+                  <span className="text-sm opacity-30 text-center">—</span>
+                ) : (
+                  <input
+                    inputMode="decimal"
+                    value={pitOverrides[n] ?? ""}
+                    onChange={(e) =>
+                      setPitOverrides((prev) => ({ ...prev, [n]: e.target.value }))
+                    }
+                    placeholder={pitPh}
+                    aria-label={`Pit ${n} time`}
+                    className="w-full rounded px-1.5 py-0.5 text-sm tabular-nums"
+                    style={{
+                      border: "1px solid var(--wtm-border)",
+                      background: pitOverrides[n] ? "var(--wtm-accent-dim)" : "transparent",
+                    }}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
     </main>
   );
 }
@@ -247,28 +351,30 @@ const PAD_B = 28;
 function Chart({
   goalLaps,
   goalMiles,
-  lapSec,
-  pitSec,
+  lapSecAt,
+  pitSecAt,
 }: {
   goalLaps: number;
   goalMiles: number;
-  lapSec: number;
-  pitSec: number;
+  lapSecAt: (n: number) => number;
+  pitSecAt: (n: number) => number;
 }) {
-  if (goalMiles <= 0 || lapSec <= 0) return null;
+  if (goalMiles <= 0) return null;
 
   // Build the projected miles-vs-time path. Each lap is a diagonal up by
-  // LAP_MILES over lapSec; each pit is a horizontal hold for pitSec.
+  // LAP_MILES over the lap's effective run time; each pit is a horizontal
+  // hold at the lap's miles for the pit-after duration. Both come from the
+  // per-lap functions so per-lap overrides flow through automatically.
   type Pt = { x: number; y: number };
   const pts: Pt[] = [{ x: 0, y: 0 }];
   let t = 0;
   let m = 0;
   for (let i = 1; i <= goalLaps; i++) {
-    t += lapSec;
+    t += lapSecAt(i);
     m += LAP_MILES;
     pts.push({ x: t, y: m });
     if (i < goalLaps) {
-      t += pitSec;
+      t += pitSecAt(i);
       pts.push({ x: t, y: m });
     }
   }
