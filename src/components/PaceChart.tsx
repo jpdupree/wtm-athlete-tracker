@@ -3,10 +3,10 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { useNow } from "@/hooks/useNow";
-import { LAP_MILES, RACE_END, RACE_START } from "@/lib/race";
+import { LAP_MILES, LAST_LAP_START_CUTOFF, RACE_END, RACE_START } from "@/lib/race";
 
 const W = 320;
-const H = 200;
+const H = 220;
 const PAD_L = 30;
 const PAD_R = 8;
 const PAD_T = 10;
@@ -39,7 +39,9 @@ export function PaceChart({
 
   const raceStartMs = RACE_START.getTime();
   const raceEndMs = RACE_END.getTime();
+  const cutoffMs = LAST_LAP_START_CUTOFF.getTime();
   const windowSec = (raceEndMs - raceStartMs) / 1000;
+  const cutoffSec = (cutoffMs - raceStartMs) / 1000;
 
   const points: Array<{ x: number; y: number }> = [{ x: 0, y: 0 }];
   for (const lap of lapRows ?? []) {
@@ -76,7 +78,12 @@ export function PaceChart({
     ? `M ${sx(last.x).toFixed(1)} ${sy(last.y).toFixed(1)} L ${sx(projectionEnd.x).toFixed(1)} ${sy(projectionEnd.y).toFixed(1)}`
     : null;
 
-  // Live "now" indicator while racing.
+  // Required-pace diagonals from origin.
+  //  - end-pace:    (0,0) → (raceEnd, goalMiles)
+  //  - cutoff-pace: (0,0) → (cutoff,  goalMiles - LAP_MILES)
+  //    (start the goal-completing lap by cutoff to have 1.5h to finish it)
+  const cutoffPaceY = Math.max(0, goalMiles - LAP_MILES);
+
   const nowSec = Math.min(windowSec, Math.max(0, (now - raceStartMs) / 1000));
   const showNow = nowSec > 0 && nowSec < windowSec;
 
@@ -141,11 +148,56 @@ export function PaceChart({
           </g>
         ))}
 
-        {/* Last-lap-start cutoff at 24h */}
+        {/* Required-pace diagonals */}
         <line
-          x1={sx(24 * 3600)}
+          x1={sx(0)}
+          y1={sy(0)}
+          x2={sx(windowSec)}
+          y2={sy(goalMiles)}
+          stroke="currentColor"
+          strokeWidth="1"
+          opacity="0.3"
+        />
+        <text
+          x={sx(windowSec) - 2}
+          y={sy(goalMiles) + 10}
+          textAnchor="end"
+          fontSize="8"
+          fill="currentColor"
+          opacity="0.55"
+        >
+          goal-by-end pace
+        </text>
+
+        {cutoffPaceY > 0 && (
+          <>
+            <line
+              x1={sx(0)}
+              y1={sy(0)}
+              x2={sx(cutoffSec)}
+              y2={sy(cutoffPaceY)}
+              stroke="currentColor"
+              strokeWidth="1"
+              opacity="0.3"
+            />
+            <text
+              x={sx(cutoffSec) - 2}
+              y={sy(cutoffPaceY) - 3}
+              textAnchor="end"
+              fontSize="8"
+              fill="currentColor"
+              opacity="0.55"
+            >
+              start-final-lap pace
+            </text>
+          </>
+        )}
+
+        {/* Cutoff vertical at 24h */}
+        <line
+          x1={sx(cutoffSec)}
           y1={PAD_T}
-          x2={sx(24 * 3600)}
+          x2={sx(cutoffSec)}
           y2={H - PAD_B}
           stroke="currentColor"
           opacity="0.18"
@@ -172,7 +224,7 @@ export function PaceChart({
           goal {goalMiles}mi
         </text>
 
-        {/* Live "now" marker */}
+        {/* Now marker */}
         {showNow && (
           <line
             x1={sx(nowSec)}
@@ -222,8 +274,8 @@ export function PaceChart({
         )}
       </svg>
       <p className="px-2 pt-1 text-[11px] opacity-60 leading-snug">
-        Solid: laps logged. Dashed: projection at current avg pace.
-        Vertical lines: cutoff (24h) and now. Right edge: race end (25.5h).
+        Solid: laps logged. Dashed: projection at current pace.
+        Thin diagonals: required pace to hit goal by cutoff / race end.
       </p>
     </div>
   );

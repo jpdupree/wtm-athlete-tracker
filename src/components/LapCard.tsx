@@ -24,6 +24,11 @@ export function LapCard({
       lapNumber > 1 ? await db.laps.get(lapId(bib, lapNumber - 1)) : undefined,
     [bib, lapNumber],
   );
+  const prevPrevLap = useLiveQuery(
+    async () =>
+      lapNumber > 2 ? await db.laps.get(lapId(bib, lapNumber - 2)) : undefined,
+    [bib, lapNumber],
+  );
 
   const completedAt = lap?.lapCompletedAt ?? null;
   const prevEnd =
@@ -33,13 +38,27 @@ export function LapCard({
       ? Math.round((new Date(completedAt).getTime() - new Date(prevEnd).getTime()) / 1000)
       : null;
 
+  const prevPrevEnd =
+    lapNumber === 2 ? RACE_START.toISOString() : prevPrevLap?.lapCompletedAt ?? null;
+  const prevDurationSec =
+    prevLap?.lapCompletedAt && prevPrevEnd
+      ? Math.round(
+          (new Date(prevLap.lapCompletedAt).getTime() - new Date(prevPrevEnd).getTime()) /
+            1000,
+        )
+      : null;
+
+  const deltaSec =
+    durationSec != null && prevDurationSec != null ? durationSec - prevDurationSec : null;
+
   const source = lap?.source;
   const provisional = lap?.provisional;
 
   return (
     <details
+      id={`lap-${lapNumber}`}
       open={inProgress}
-      className="rounded-lg border border-current/20 overflow-hidden"
+      className="rounded-lg border border-current/20 overflow-hidden scroll-mt-4"
     >
       <summary className="flex items-center justify-between cursor-pointer px-4 py-3 select-none gap-2">
         <span className="min-w-0">
@@ -51,6 +70,12 @@ export function LapCard({
             <span className="ml-2 text-xs opacity-70 tabular-nums">
               {fmtVenueClock(completedAt)}
               {durationSec != null && ` · ${fmtSec(durationSec)}`}
+              {deltaSec != null && (
+                <span className={`ml-1 ${deltaColor(deltaSec)}`}>
+                  ({deltaPrefix(deltaSec)}
+                  {fmtSec(Math.abs(deltaSec))})
+                </span>
+              )}
             </span>
           )}
         </span>
@@ -98,6 +123,22 @@ export function LapCard({
   );
 }
 
+function deltaPrefix(sec: number): string {
+  return sec > 0 ? "+" : sec < 0 ? "−" : "±";
+}
+
+function deltaColor(sec: number): string {
+  if (sec >= 60) return "text-red-500";
+  if (sec <= -60) return "text-green-500";
+  return "text-amber-500";
+}
+
+function pitColor(sec: number): string {
+  if (sec <= 15 * 60) return "text-green-500";
+  if (sec <= 25 * 60) return "text-amber-500";
+  return "text-red-500";
+}
+
 function PitTimer({ bib, lapNumber }: { bib: number; lapNumber: number }) {
   const lap = useLiveQuery(() => db.laps.get(lapId(bib, lapNumber)), [bib, lapNumber]);
   const start = lap?.pitStartedAt;
@@ -116,7 +157,7 @@ function PitTimer({ bib, lapNumber }: { bib: number; lapNumber: number }) {
           </span>
         )}
         {end && (
-          <span className="tabular-nums opacity-80">
+          <span className={`tabular-nums ${durationSec != null ? pitColor(durationSec) : ""}`}>
             out {fmtVenueClock(end)}
             {durationSec != null && ` · ${fmtSec(durationSec)}`}
           </span>

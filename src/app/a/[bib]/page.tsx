@@ -5,11 +5,15 @@ import { use } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { useAthleteRow } from "@/hooks/useAthleteRow";
-import { fmtAge, fmtSec } from "@/lib/format";
+import { fmtAge } from "@/lib/format";
 import { Countdowns } from "@/components/Countdowns";
 import { GoalMilesEditor } from "@/components/GoalMilesEditor";
 import { FinishPrediction } from "@/components/FinishPrediction";
 import { PaceChart } from "@/components/PaceChart";
+import { IntakeBars } from "@/components/IntakeBars";
+import { IntakeTargetsEditor } from "@/components/IntakeTargetsEditor";
+import { StatsGrid } from "@/components/StatsGrid";
+import { LapStrip } from "@/components/LapStrip";
 import { LapCard } from "@/components/LapCard";
 
 export default function AthleteDetailPage({
@@ -42,7 +46,6 @@ export default function AthleteDetailPage({
   }
 
   const apiLaps = row?.laps ?? 0;
-  // Render cards for completed laps + the in-progress one (so crew can pre-stage entries).
   const lapNumbers: number[] = [];
   for (let n = apiLaps + 1; n >= 1; n--) lapNumbers.push(n);
 
@@ -57,24 +60,19 @@ export default function AthleteDetailPage({
           {(followed.gender ?? row?.gender) && ` · ${followed.gender ?? row?.gender}`}
           {followed.team && ` · ${followed.team}`}
           {row && ` · ${row.nation}`}
+          {row && (row.overallRank > 0 || row.genderRank > 0) && (
+            <>
+              {" "}· <span className="tabular-nums">#{row.overallRank} overall</span>
+              {row.genderRank > 0 && <> · <span className="tabular-nums">#{row.genderRank} {followed.gender ?? row.gender ?? "gender"}</span></>}
+              {row.ageGroupRank != null && <> · <span className="tabular-nums">#{row.ageGroupRank} AG</span></>}
+            </>
+          )}
         </p>
       </header>
 
       <Countdowns />
 
-      <section className="grid grid-cols-2 gap-2">
-        <div className="rounded-lg border border-current/20 px-4 py-3">
-          <p className="text-xs uppercase tracking-wide opacity-60">Live</p>
-          <p className="mt-1 text-lg font-semibold tabular-nums">
-            {row ? `${row.laps} laps · ${row.distanceMiles} mi` : loading ? "…" : "no data"}
-          </p>
-          <p className="text-xs opacity-60">
-            {row?.lastSeenLabel ?? "—"}
-            {row && ` · last lap ${fmtSec(row.lastLapSec)}`}
-          </p>
-        </div>
-        <GoalMilesEditor bib={bib} goalMiles={followed.goalMiles} />
-      </section>
+      <GoalMilesEditor bib={bib} goalMiles={followed.goalMiles} />
 
       <FinishPrediction
         totalSec={row?.totalSec ?? 0}
@@ -89,6 +87,24 @@ export default function AthleteDetailPage({
         goalMiles={followed.goalMiles}
       />
 
+      <StatsGrid
+        bib={bib}
+        totalSec={row?.totalSec ?? 0}
+        laps={row?.laps ?? 0}
+        lastLapSec={row?.lastLapSec ?? null}
+      />
+
+      <IntakeBars
+        bib={bib}
+        totalSec={row?.totalSec ?? 0}
+        targets={{
+          calPerHr: followed.targetCalPerHr,
+          fluidMlPerHr: followed.targetFluidMlPerHr,
+          sodiumMgPerHr: followed.targetSodiumMgPerHr,
+        }}
+      />
+      <IntakeTargetsEditor athlete={followed} />
+
       <section className="space-y-2">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-wide opacity-70">
@@ -98,9 +114,17 @@ export default function AthleteDetailPage({
             {row ? `feed updated ${fmtAge(ageMs)}` : ""}
           </span>
         </div>
+
+        <LapStrip bib={bib} lapCount={apiLaps} />
+
         {error && (
           <p className="rounded-md border border-red-500/50 bg-red-500/10 px-3 py-2 text-sm">
             {error.message}
+          </p>
+        )}
+        {!loading && !row && (
+          <p className="rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-sm">
+            No feed row found for bib #{bib}. They may not be racing yet, or the bib may not be in the slice.
           </p>
         )}
         {lapNumbers.length === 0 ? (

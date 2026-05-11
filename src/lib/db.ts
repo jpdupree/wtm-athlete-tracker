@@ -7,6 +7,10 @@ export type FollowedAthlete = {
   team: string | null;
   goalMiles: number | null;
   addedAt: string;
+  // Optional per-athlete intake targets. Undefined → fall back to INTAKE_DEFAULTS.
+  targetCalPerHr?: number | null;
+  targetFluidMlPerHr?: number | null;
+  targetSodiumMgPerHr?: number | null;
 };
 
 export type Lap = {
