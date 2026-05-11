@@ -10,6 +10,7 @@ import { ManualAddForm } from "@/components/ManualAddForm";
 export default function AddAthletePage() {
   const { data, error, loading } = useOverallFeed();
   const [q, setQ] = useState("");
+  const [manualOpen, setManualOpen] = useState(false);
 
   const rows = useMemo(() => {
     if (!data) return [];
@@ -21,12 +22,20 @@ export default function AddAthletePage() {
     );
   }, [data, q]);
 
-  const showManual = data && q.trim() !== "" && rows.length === 0;
+  // Search fallback only when the user has typed AND we're not already
+  // showing the explicit manual panel from the top button.
+  const showManualFromSearch =
+    !manualOpen && !!data && q.trim() !== "" && rows.length === 0;
 
   return (
     <main className="mx-auto max-w-md px-4 py-6 space-y-4">
       <header className="flex items-center justify-between">
-        <Link href="/" className="text-sm opacity-70">← Home</Link>
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1 text-xs uppercase tracking-wider opacity-60 hover:opacity-100"
+        >
+          <span style={{ color: "var(--wtm-accent)" }}>←</span> Home
+        </Link>
         <span className="text-xs opacity-50">
           {data
             ? `${data.rows.length} athletes · updated ${fmtAge(data.ageMs)}`
@@ -36,7 +45,29 @@ export default function AddAthletePage() {
         </span>
       </header>
 
-      <h1 className="text-2xl font-bold">Add athlete</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="wtm-display text-3xl leading-none">Add athlete</h1>
+        <button
+          type="button"
+          onClick={() => setManualOpen((v) => !v)}
+          aria-expanded={manualOpen}
+          aria-controls="manual-add-panel"
+          className="rounded-md px-3 py-1.5 text-xs uppercase tracking-wider font-semibold transition-colors"
+          style={{
+            border: "1px solid var(--wtm-accent)",
+            color: manualOpen ? "var(--wtm-fg)" : "var(--wtm-accent)",
+            background: manualOpen ? "var(--wtm-accent-dim)" : "transparent",
+          }}
+        >
+          {manualOpen ? "Close" : "+ Manual"}
+        </button>
+      </div>
+
+      {manualOpen && (
+        <div id="manual-add-panel">
+          <ManualAddForm />
+        </div>
+      )}
 
       <input
         type="search"
@@ -75,9 +106,11 @@ export default function AddAthletePage() {
         </p>
       )}
 
-      {showManual && (
+      {showManualFromSearch && (
         <>
-          <p className="text-center text-sm opacity-60">No matches for &ldquo;{q}&rdquo;.</p>
+          <p className="text-center text-sm opacity-60">
+            No matches for &ldquo;{q}&rdquo;.
+          </p>
           <ManualAddForm initialName={/^\d+$/.test(q.trim()) ? "" : q.trim()} />
         </>
       )}
