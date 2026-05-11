@@ -174,23 +174,29 @@ export default function HomePage() {
   );
 }
 
-// Text wordmark that follows the theme: foreground colour for the outer
-// words, brand accent for "OCR", and a short underline rule. Swap this
-// for a real <img> / <svg> drop-in when the OCR Report logo exists.
+// Theme-paired logo. Each variant lives at /public/logo-{light,dark}.png;
+// CSS swaps which one is visible based on the html[data-theme] attribute.
+// If the files are missing the broken-image icons make the gap obvious.
 function BrandMark() {
   return (
-    <div className="flex flex-col items-center gap-1.5 select-none">
-      <p
-        className="wtm-display text-xl leading-none"
-        style={{ color: "var(--wtm-fg)" }}
-      >
-        The{" "}
-        <span style={{ color: "var(--wtm-accent)" }}>OCR</span>{" "}
-        Report
-      </p>
-      <div
-        className="h-px w-16"
-        style={{ background: "var(--wtm-accent)" }}
+    <div className="flex flex-col items-center select-none">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/logo-light.png"
+        alt="The OCR Report"
+        width={200}
+        height={200}
+        className="wtm-logo-light h-20 w-auto"
+        loading="lazy"
+      />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/logo-dark.png"
+        alt="The OCR Report"
+        width={200}
+        height={200}
+        className="wtm-logo-dark h-20 w-auto"
+        loading="lazy"
       />
     </div>
   );

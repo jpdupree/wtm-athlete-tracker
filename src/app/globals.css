@@ -73,3 +73,9 @@ body::before {
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-thumb { background: var(--wtm-border-strong); border-radius: 3px; }
+
+/* Theme-paired brand mark. Defaults to dark when data-theme isn't set
+   (matches our :root color-scheme default), so SSR/pre-hydration looks
+   right too. */
+[data-theme="light"] .wtm-logo-dark { display: none; }
+html:not([data-theme="light"]) .wtm-logo-light { display: none; }
