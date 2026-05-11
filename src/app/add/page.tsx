@@ -3,29 +3,39 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useOverallFeed } from "@/components/FeedProvider";
+import { useFeed } from "@/hooks/useFeed";
 import { fmtAge, fmtSec } from "@/lib/format";
 import { FollowButton } from "@/components/FollowButton";
 import { ManualAddForm } from "@/components/ManualAddForm";
 
 export default function AddAthletePage() {
   const { data, error, loading } = useOverallFeed();
+  // Teams aren't in the overall slice (different ranking semantics), but
+  // for the picker we want everything followable in one list.
+  const teamsFeed = useFeed("teams");
   const [q, setQ] = useState("");
   const [manualOpen, setManualOpen] = useState(false);
 
+  const allRows = useMemo(() => {
+    const ind = data?.rows ?? [];
+    const teams = teamsFeed.data?.rows ?? [];
+    return [...ind, ...teams];
+  }, [data, teamsFeed.data]);
+
   const rows = useMemo(() => {
-    if (!data) return [];
+    if (allRows.length === 0) return [];
     const term = q.trim().toLowerCase();
-    if (!term) return data.rows;
+    if (!term) return allRows;
     const isNumeric = /^\d+$/.test(term);
-    return data.rows.filter((r) =>
+    return allRows.filter((r) =>
       isNumeric ? String(r.bib).startsWith(term) : r.name.toLowerCase().includes(term),
     );
-  }, [data, q]);
+  }, [allRows, q]);
 
   // Search fallback only when the user has typed AND we're not already
   // showing the explicit manual panel from the top button.
   const showManualFromSearch =
-    !manualOpen && !!data && q.trim() !== "" && rows.length === 0;
+    !manualOpen && (!!data || !!teamsFeed.data) && q.trim() !== "" && rows.length === 0;
 
   return (
     <main className="mx-auto max-w-md px-4 py-6 space-y-4">
@@ -37,8 +47,8 @@ export default function AddAthletePage() {
           <span style={{ color: "var(--wtm-accent)" }}>←</span> Home
         </Link>
         <span className="text-xs opacity-50">
-          {data
-            ? `${data.rows.length} athletes · updated ${fmtAge(data.ageMs)}`
+          {allRows.length > 0
+            ? `${allRows.length} entries · updated ${fmtAge(data?.ageMs ?? 0)}`
             : loading
               ? "Loading…"
               : ""}
@@ -87,12 +97,28 @@ export default function AddAthletePage() {
 
       <ul className="divide-y divide-current/10">
         {rows.slice(0, 100).map((r) => (
-          <li key={r.bib} className="flex items-center justify-between py-2">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{r.name}</p>
+          <li key={r.bib} className="flex items-center justify-between py-2 gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium flex items-center gap-1.5">
+                {r.category === "Team" && (
+                  <span
+                    className="rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+                    style={{
+                      background: "var(--wtm-accent-dim)",
+                      color: "var(--wtm-accent)",
+                    }}
+                  >
+                    Team
+                  </span>
+                )}
+                <span className="truncate">{r.name}</span>
+              </p>
               <p className="truncate text-xs opacity-60">
-                #{r.bib} · {r.nation} · {r.category}
-                {r.laps > 0 && ` · ${r.laps} laps · last ${fmtSec(r.lastLapSec)}`}
+                #{r.bib}
+                {r.nation && ` · ${r.nation}`}
+                {r.category !== "Team" && ` · ${r.category}`}
+                {r.laps > 0 && ` · ${r.laps} laps`}
+                {r.laps > 0 && r.lastLapSec != null && ` · last ${fmtSec(r.lastLapSec)}`}
               </p>
             </div>
             <FollowButton row={r} />
