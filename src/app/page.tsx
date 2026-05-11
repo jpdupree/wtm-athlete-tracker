@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { FollowedList } from "@/components/FollowedList";
 
 // External link URLs are placeholders — fill these in once the public RaceResult URL,
@@ -17,6 +18,13 @@ export default function HomePage() {
       </header>
 
       <FollowedList />
+
+      <Link
+        href="/map"
+        className="block rounded-md border border-current/30 px-4 py-3 text-center text-sm font-medium"
+      >
+        Course view
+      </Link>
 
       <nav className="space-y-2">
         {LINKS.map((l) => (
