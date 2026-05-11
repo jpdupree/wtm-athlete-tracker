@@ -21,10 +21,18 @@ export type YearConfig = {
 };
 
 // 2022 was the first year The OCR Report live-streamed WTM, so the
-// picker starts there. Live-stream URLs are placeholders until the
-// actual recording URLs are slotted in.
+// picker starts there. Each year's liveStreamUrl points at the YouTube
+// playlist of that year's broadcast; 2026 uses the channel's /live
+// page which redirects to the current stream on race day.
 export const YEARS: YearConfig[] = [
-  { year: 2022, eventId: null, liveStreamUrl: null, venue: "Atlanta Motor Speedway", hasData: false },
+  {
+    year: 2022,
+    eventId: null,
+    liveStreamUrl:
+      "https://youtube.com/playlist?list=PLyK0g0eIg3RUatl_wqdq80W5fLcUyB1rW&si=V549l4spA0XEJKVU",
+    venue: "Atlanta Motor Speedway",
+    hasData: false,
+  },
   { year: 2023, eventId: null, liveStreamUrl: null, venue: "Atlanta Motor Speedway", hasData: false },
   { year: 2024, eventId: null, liveStreamUrl: null, venue: "Atlanta Motor Speedway", hasData: false },
   { year: 2025, eventId: "348237", liveStreamUrl: null, venue: "Belvoir Castle", hasData: true },
