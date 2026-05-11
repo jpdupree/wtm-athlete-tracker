@@ -39,21 +39,24 @@ export async function syncBibLapsFromPassings(
   bib: number,
   passings: Passing[],
 ): Promise<void> {
+  // An empty response is treated as "probably transient" — keep what we
+  // have rather than nuke confirmed history on a flaky poll. Real
+  // truncations (sim window shifts, retracted timing data) only fire when
+  // the API returns SOME laps but fewer than we have locally.
   if (passings.length === 0) return;
 
-  // Read all priors in ONE bulk call, then accumulate the writes that
-  // actually differ and flush in ONE bulkPut. Previous per-lap get/put
-  // pairs created N*2 IndexedDB transactions per athlete, which compounded
-  // across followed athletes was enough to starve other writes (e.g.
-  // saving a goal would hang behind a passings sync on slower devices).
-  const ids = passings.map((p) => lapId(bib, p.lapNumber));
-  const priors = await db.laps.bulkGet(ids);
-  const writes: Lap[] = [];
+  // Read everything we currently have for this bib once, then compute
+  // both the writes (rows whose timestamps changed) and the deletes
+  // (api-sourced rows the new passings no longer include) in memory, and
+  // flush both in a single rw transaction.
+  const existing = await db.laps.where("bib").equals(bib).toArray();
+  const existingById = new Map(existing.map((r) => [r.id, r]));
+  const validIds = new Set(passings.map((p) => lapId(bib, p.lapNumber)));
 
-  for (let i = 0; i < passings.length; i++) {
-    const p = passings[i];
-    const id = ids[i];
-    const prior = priors[i];
+  const writes: Lap[] = [];
+  for (const p of passings) {
+    const id = lapId(bib, p.lapNumber);
+    const prior = existingById.get(id);
 
     // Compute window timestamps from durations when we have them.
     // For lap N: completedAt is the end; lapStartedAt = completedAt - lapSec;
@@ -99,9 +102,18 @@ export async function syncBibLapsFromPassings(
     });
   }
 
-  if (writes.length > 0) {
-    await db.laps.bulkPut(writes);
-  }
+  // Prune api-source rows the new passings no longer include. Manual rows
+  // are left alone — those belong to the user, not the feed.
+  const toDelete = existing
+    .filter((l) => l.source === "api" && !validIds.has(l.id))
+    .map((l) => l.id);
+
+  if (writes.length === 0 && toDelete.length === 0) return;
+
+  await db.transaction("rw", db.laps, async () => {
+    if (writes.length > 0) await db.laps.bulkPut(writes);
+    if (toDelete.length > 0) await db.laps.bulkDelete(toDelete);
+  });
 }
 
 export async function markLapManual(bib: number, lapNumber: number): Promise<void> {
