@@ -13,9 +13,12 @@ export function LapSyncProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!data || !followed?.length) return;
-    const followedBibs = new Set(followed.map((a) => a.bib));
+    // Paused athletes skip sync — their data stays as it is.
+    const activeBibs = new Set(
+      followed.filter((a) => !a.paused).map((a) => a.bib),
+    );
     void Promise.all(
-      data.rows.filter((r) => followedBibs.has(r.bib)).map((r) => syncBibLaps(r)),
+      data.rows.filter((r) => activeBibs.has(r.bib)).map((r) => syncBibLaps(r)),
     );
   }, [data, followed]);
 
@@ -27,18 +30,20 @@ export function LapSyncProvider({ children }: { children: React.ReactNode }) {
     if (!followed?.length) return;
     let cancelled = false;
     void Promise.all(
-      followed.map(async (a) => {
-        if (cancelled) return;
-        try {
-          const res = await fetch(`/api/passings/${a.bib}`, { cache: "no-store" });
-          if (!res.ok) return;
-          const body = (await res.json()) as PassingsResponse;
+      followed
+        .filter((a) => !a.paused)
+        .map(async (a) => {
           if (cancelled) return;
-          await syncBibLapsFromPassings(a.bib, body.passings);
-        } catch {
-          /* swallow — best-effort */
-        }
-      }),
+          try {
+            const res = await fetch(`/api/passings/${a.bib}`, { cache: "no-store" });
+            if (!res.ok) return;
+            const body = (await res.json()) as PassingsResponse;
+            if (cancelled) return;
+            await syncBibLapsFromPassings(a.bib, body.passings);
+          } catch {
+            /* swallow — best-effort */
+          }
+        }),
     );
     return () => {
       cancelled = true;

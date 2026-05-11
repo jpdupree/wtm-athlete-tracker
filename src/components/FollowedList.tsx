@@ -153,9 +153,22 @@ function marginMs(a: FollowedAthlete, row: Athlete | null): number | null {
 function Row({ athlete, apiRow }: { athlete: FollowedAthlete; apiRow: Athlete | null }) {
   const verdict = computeVerdict(athlete, apiRow);
   return (
-    <li className="flex items-center justify-between px-4 py-3">
+    <li
+      className="flex items-center justify-between px-4 py-3"
+      style={athlete.paused ? { opacity: 0.55 } : undefined}
+    >
       <Link href={`/a/${athlete.bib}`} className="min-w-0 flex-1 pr-3">
-        <p className="truncate text-sm font-medium">{athlete.name}</p>
+        <p className="truncate text-sm font-medium flex items-center gap-1.5">
+          {athlete.paused && (
+            <span
+              className="rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+              style={{ background: "var(--wtm-border)", color: "var(--wtm-fg-muted)" }}
+            >
+              Paused
+            </span>
+          )}
+          <span className="truncate">{athlete.name}</span>
+        </p>
         <p className="truncate text-xs opacity-60">
           #{athlete.bib}
           {athlete.gender && ` · ${athlete.gender}`}

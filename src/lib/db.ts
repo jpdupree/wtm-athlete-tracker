@@ -8,6 +8,11 @@ export type FollowedAthlete = {
   goalMiles: number | null;
   // Target per-pit duration in seconds. Undefined / null = no goal set.
   goalPitSec?: number | null;
+  // When true, the athlete stays in the followed list and keeps its
+  // locally-stored history (laps, fuel, notes), but the periodic sync
+  // skips it — useful after a DNF when you want to preserve the data
+  // without churning the network on every poll.
+  paused?: boolean;
   addedAt: string;
   // Optional per-athlete intake targets. Undefined → fall back to INTAKE_DEFAULTS.
   targetCalPerHr?: number | null;
