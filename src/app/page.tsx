@@ -147,7 +147,7 @@ export default function HomePage() {
 
       <footer className="pt-2 space-y-6">
         <div>
-          <p className="text-[10px] uppercase tracking-[0.18em] opacity-50 pl-1 mb-2">
+          <p className="text-[10px] uppercase tracking-[0.18em] opacity-50 text-center mb-2">
             Follow The OCR Report
           </p>
           <div className="flex items-center justify-center gap-3">
