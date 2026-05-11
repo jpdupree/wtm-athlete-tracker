@@ -1,10 +1,44 @@
 import { db, type FuelEntry, type Lap } from "./db";
 
+// WTM-tuned defaults: cold/wet conditions push fluid lower and sodium higher
+// vs. a typical hot-weather ultra. Cramping is a top WTM DNF cause.
 export const INTAKE_DEFAULTS = {
   calPerHr: 250,
-  fluidMlPerHr: 590, // ~20 oz
-  sodiumMgPerHr: 500,
+  fluidMlPerHr: 500, // ~17 oz
+  sodiumMgPerHr: 600,
 };
+
+export type IntakeProfile = {
+  name: string;
+  description: string;
+  calPerHr: number;
+  fluidMlPerHr: number;
+  sodiumMgPerHr: number;
+};
+
+export const INTAKE_PROFILES: IntakeProfile[] = [
+  {
+    name: "Light",
+    description: "smaller athletes, conservative gut",
+    calPerHr: 200,
+    fluidMlPerHr: 400,
+    sodiumMgPerHr: 450,
+  },
+  {
+    name: "Default",
+    description: "WTM-tuned baseline (cool/wet)",
+    calPerHr: 250,
+    fluidMlPerHr: 500,
+    sodiumMgPerHr: 600,
+  },
+  {
+    name: "Heavy",
+    description: "larger athletes, heavy sweater",
+    calPerHr: 300,
+    fluidMlPerHr: 700,
+    sodiumMgPerHr: 800,
+  },
+];
 
 export type IntakeTotals = {
   cal: number;

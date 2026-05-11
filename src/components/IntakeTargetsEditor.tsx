@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { db, type FollowedAthlete } from "@/lib/db";
-import { INTAKE_DEFAULTS } from "@/lib/intake";
+import { INTAKE_DEFAULTS, INTAKE_PROFILES } from "@/lib/intake";
 
 export function IntakeTargetsEditor({ athlete }: { athlete: FollowedAthlete }) {
   const [open, setOpen] = useState(false);
@@ -28,7 +28,7 @@ export function IntakeTargetsEditor({ athlete }: { athlete: FollowedAthlete }) {
 
   return (
     <form
-      className="rounded-lg border border-dashed border-current/30 px-4 py-3 space-y-2"
+      className="rounded-lg border border-dashed border-current/30 px-4 py-3 space-y-3"
       onSubmit={async (e) => {
         e.preventDefault();
         await db.followed.update(athlete.bib, {
@@ -40,6 +40,28 @@ export function IntakeTargetsEditor({ athlete }: { athlete: FollowedAthlete }) {
       }}
     >
       <p className="text-xs uppercase tracking-wide opacity-60">Targets / hour</p>
+
+      <div className="space-y-1">
+        <p className="text-[11px] opacity-60">Quick profile:</p>
+        <div className="flex flex-wrap gap-1">
+          {INTAKE_PROFILES.map((p) => (
+            <button
+              key={p.name}
+              type="button"
+              onClick={() => {
+                setCal(String(p.calPerHr));
+                setFluid(String(p.fluidMlPerHr));
+                setNa(String(p.sodiumMgPerHr));
+              }}
+              className="rounded-full border border-current/20 px-2 py-0.5 text-[11px]"
+              title={p.description}
+            >
+              {p.name} ({p.calPerHr}/{p.fluidMlPerHr}/{p.sodiumMgPerHr})
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="grid grid-cols-3 gap-2 text-xs">
         <label>
           <span className="opacity-70">Calories</span>
@@ -72,7 +94,8 @@ export function IntakeTargetsEditor({ athlete }: { athlete: FollowedAthlete }) {
           />
         </label>
       </div>
-      <div className="flex gap-2">
+
+      <div className="flex flex-wrap gap-2">
         <button type="submit" className="rounded-md border border-current/40 px-3 py-1 text-xs font-medium">
           Save
         </button>
