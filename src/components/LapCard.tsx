@@ -323,6 +323,20 @@ function NoteEntries({ bib, lapNumber, target }: { bib: number; lapNumber: numbe
   );
 }
 
+const FUEL_PRESETS: Array<{
+  label: string;
+  kcal: number | null;
+  sodium: number | null;
+  fluid: number | null;
+}> = [
+  { label: "Gel", kcal: 100, sodium: 30, fluid: 0 },
+  { label: "Bar", kcal: 200, sodium: 100, fluid: 0 },
+  { label: "Bottle (water)", kcal: 0, sodium: 0, fluid: 500 },
+  { label: "Endurance drink", kcal: 200, sodium: 400, fluid: 500 },
+  { label: "Salt cap", kcal: 0, sodium: 350, fluid: 0 },
+  { label: "Real food", kcal: 250, sodium: 150, fluid: 0 },
+];
+
 function AddFuel({ bib, lapNumber, target }: { bib: number; lapNumber: number; target: Target }) {
   const [open, setOpen] = useState(false);
   const [label, setLabel] = useState("");
@@ -337,6 +351,13 @@ function AddFuel({ bib, lapNumber, target }: { bib: number; lapNumber: number; t
       </button>
     );
   }
+
+  const applyPreset = (p: (typeof FUEL_PRESETS)[number]) => {
+    setLabel(p.label);
+    setKcal(p.kcal != null ? String(p.kcal) : "");
+    setSodium(p.sodium != null ? String(p.sodium) : "");
+    setFluid(p.fluid != null ? String(p.fluid) : "");
+  };
 
   return (
     <form
@@ -360,6 +381,18 @@ function AddFuel({ bib, lapNumber, target }: { bib: number; lapNumber: number; t
         setOpen(false);
       }}
     >
+      <div className="flex flex-wrap gap-1">
+        {FUEL_PRESETS.map((p) => (
+          <button
+            key={p.label}
+            type="button"
+            onClick={() => applyPreset(p)}
+            className="rounded-full border border-current/20 px-2 py-0.5 text-[11px] opacity-80 hover:opacity-100"
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
       <input
         placeholder="Label (gel, bar, drink…)"
         value={label}

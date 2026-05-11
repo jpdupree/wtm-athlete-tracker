@@ -80,6 +80,17 @@ export default function AthleteDetailPage({
         goalMiles={followed.goalMiles}
       />
 
+      <IntakeBars
+        bib={bib}
+        totalSec={row?.totalSec ?? 0}
+        targets={{
+          calPerHr: followed.targetCalPerHr,
+          fluidMlPerHr: followed.targetFluidMlPerHr,
+          sodiumMgPerHr: followed.targetSodiumMgPerHr,
+        }}
+      />
+      <IntakeTargetsEditor athlete={followed} />
+
       <PaceChart
         bib={bib}
         totalSec={row?.totalSec ?? 0}
@@ -93,17 +104,6 @@ export default function AthleteDetailPage({
         laps={row?.laps ?? 0}
         lastLapSec={row?.lastLapSec ?? null}
       />
-
-      <IntakeBars
-        bib={bib}
-        totalSec={row?.totalSec ?? 0}
-        targets={{
-          calPerHr: followed.targetCalPerHr,
-          fluidMlPerHr: followed.targetFluidMlPerHr,
-          sodiumMgPerHr: followed.targetSodiumMgPerHr,
-        }}
-      />
-      <IntakeTargetsEditor athlete={followed} />
 
       <section className="space-y-2">
         <div className="flex items-center justify-between">

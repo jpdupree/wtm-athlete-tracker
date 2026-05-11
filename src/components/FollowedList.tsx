@@ -2,13 +2,18 @@
 
 import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
-import { db } from "@/lib/db";
+import { db, type FollowedAthlete } from "@/lib/db";
+import { useOverallFeed } from "@/components/FeedProvider";
+import { predict } from "@/lib/predict";
+import { LAP_MILES } from "@/lib/race";
+import type { Athlete } from "@/lib/types";
 
 export function FollowedList() {
   const followed = useLiveQuery(
     () => db.followed.orderBy("addedAt").toArray(),
     [],
   );
+  const { data } = useOverallFeed();
 
   if (followed === undefined) {
     return <p className="text-sm opacity-50">Loading…</p>;
@@ -32,28 +37,7 @@ export function FollowedList() {
     <section className="space-y-3">
       <ul className="divide-y divide-current/10 rounded-lg border border-current/20">
         {followed.map((a) => (
-          <li key={a.bib} className="flex items-center justify-between px-4 py-3">
-            <Link href={`/a/${a.bib}`} className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{a.name}</p>
-              <p className="truncate text-xs opacity-60">
-                #{a.bib}
-                {a.gender && ` · ${a.gender}`}
-                {a.team && ` · ${a.team}`}
-                {a.goalMiles != null && ` · goal ${a.goalMiles}mi`}
-              </p>
-            </Link>
-            <button
-              onClick={() => {
-                if (confirm(`Remove ${a.name} from followed?`)) {
-                  void db.followed.delete(a.bib);
-                }
-              }}
-              aria-label={`Remove ${a.name}`}
-              className="ml-3 shrink-0 rounded-md border border-current/20 px-2 py-1 text-xs opacity-60 hover:opacity-100"
-            >
-              ×
-            </button>
-          </li>
+          <Row key={a.bib} athlete={a} apiRow={data?.rows.find((r) => r.bib === a.bib) ?? null} />
         ))}
       </ul>
       <Link
@@ -63,5 +47,69 @@ export function FollowedList() {
         Add another athlete
       </Link>
     </section>
+  );
+}
+
+function Row({ athlete, apiRow }: { athlete: FollowedAthlete; apiRow: Athlete | null }) {
+  const verdict = computeVerdict(athlete, apiRow);
+  return (
+    <li className="flex items-center justify-between px-4 py-3">
+      <Link href={`/a/${athlete.bib}`} className="min-w-0 flex-1 pr-3">
+        <p className="truncate text-sm font-medium">{athlete.name}</p>
+        <p className="truncate text-xs opacity-60">
+          #{athlete.bib}
+          {athlete.gender && ` · ${athlete.gender}`}
+          {apiRow && ` · lap ${apiRow.laps} · ${apiRow.distanceMiles} mi`}
+          {!apiRow && " · pre-race"}
+          {athlete.goalMiles != null && ` · goal ${athlete.goalMiles}mi`}
+        </p>
+      </Link>
+      <div className="flex items-center gap-2 shrink-0">
+        <Verdict verdict={verdict} />
+        <button
+          onClick={() => {
+            if (confirm(`Remove ${athlete.name} from followed?`)) {
+              void db.followed.delete(athlete.bib);
+            }
+          }}
+          aria-label={`Remove ${athlete.name}`}
+          className="rounded-md border border-current/20 px-2 py-1 text-xs opacity-60 hover:opacity-100"
+        >
+          ×
+        </button>
+      </div>
+    </li>
+  );
+}
+
+type V = "on-pace" | "behind" | "reached" | "no-goal" | "no-data";
+
+function computeVerdict(a: FollowedAthlete, row: Athlete | null): V {
+  if (a.goalMiles == null) return "no-goal";
+  if (!row || row.laps <= 0) return "no-data";
+  if (row.laps * LAP_MILES >= a.goalMiles) return "reached";
+  const p = predict({ totalSec: row.totalSec ?? 0, laps: row.laps, goalMiles: a.goalMiles });
+  if (!p) return "no-data";
+  return p.marginMs >= 0 ? "on-pace" : "behind";
+}
+
+function Verdict({ verdict }: { verdict: V }) {
+  if (verdict === "no-goal" || verdict === "no-data") {
+    return <span className="text-[10px] uppercase tracking-wide opacity-40">—</span>;
+  }
+  const styles: Record<Exclude<V, "no-goal" | "no-data">, string> = {
+    "on-pace": "border-green-500/50 bg-green-500/10 text-green-700 dark:text-green-300",
+    behind: "border-red-500/50 bg-red-500/10 text-red-700 dark:text-red-300",
+    reached: "border-green-600/50 bg-green-600/15 text-green-800 dark:text-green-200",
+  };
+  const text: Record<Exclude<V, "no-goal" | "no-data">, string> = {
+    "on-pace": "On pace",
+    behind: "Behind",
+    reached: "Goal hit",
+  };
+  return (
+    <span className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide ${styles[verdict]}`}>
+      {text[verdict]}
+    </span>
   );
 }
