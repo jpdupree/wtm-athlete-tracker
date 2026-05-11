@@ -19,11 +19,12 @@ const FADE_RATIOS: number[] = [
 // Cumulative slowdown going from `fromLap` pace to lap K pace, based on
 // historical medians. Returns 1.0 when K <= fromLap or when off-table.
 //
-// Capped at MAX_FADE: physically, even finishers don't go more than ~2x
-// their fresh-legs pace. Without a cap, projecting from an early lap (1-2)
-// to a far goal (lap 18-20) compounds 17+ ratios and tips every athlete
-// red — the math diverges where reality saturates.
-const MAX_FADE = 2.0;
+// Capped at MAX_FADE. Calibrated against the 2025 22-lap winner (Joseph
+// Rucco): at lap 1 with a 21-lap (105mi) goal, the cap needs to be ≤1.8
+// for the projection to stay under race-end. Higher caps tipped real
+// finishers red on lap 1 — pessimistic enough to hide the signal the
+// fade table is actually carrying.
+const MAX_FADE = 1.8;
 
 export function fadeFactor(fromLap: number, toLap: number): number {
   if (toLap <= fromLap) return 1;
