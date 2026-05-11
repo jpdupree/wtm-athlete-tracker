@@ -1,0 +1,43 @@
+// Per-year configuration. Add a new entry to YEARS to enable that year in
+// the picker — no other code touches needed for the UI side. Hooking up
+// actual race data for a year is a separate step (fixtures or live API).
+
+export type YearConfig = {
+  year: number;
+  // RaceResult event id, if known. Null for years whose event hasn't been
+  // published yet.
+  eventId: string | null;
+  // YouTube (or other) URL for that year's live broadcast or recording.
+  // Race-day 2026 uses the channel's /live page which redirects to the
+  // current stream; past years should point at the recorded broadcast.
+  // null while the link isn't known yet — the UI renders "link pending".
+  liveStreamUrl: string | null;
+  // Display venue name for the year (used in the picker tooltip).
+  venue: string;
+  // Whether the app currently has fixture / live data wired up for this
+  // year. When false, the UI shows a "data not yet wired up" banner and
+  // the followed list / picker still works but no athlete data flows.
+  hasData: boolean;
+};
+
+// 2022 was the first year The OCR Report live-streamed WTM, so the
+// picker starts there. Live-stream URLs are placeholders until the
+// actual recording URLs are slotted in.
+export const YEARS: YearConfig[] = [
+  { year: 2022, eventId: null, liveStreamUrl: null, venue: "Atlanta Motor Speedway", hasData: false },
+  { year: 2023, eventId: null, liveStreamUrl: null, venue: "Atlanta Motor Speedway", hasData: false },
+  { year: 2024, eventId: null, liveStreamUrl: null, venue: "Atlanta Motor Speedway", hasData: false },
+  { year: 2025, eventId: "348237", liveStreamUrl: null, venue: "Belvoir Castle", hasData: true },
+  { year: 2026, eventId: null, liveStreamUrl: "https://www.youtube.com/@theocrreport/live", venue: "TBA", hasData: false },
+];
+
+export const DEFAULT_YEAR = 2025;
+
+export function configFor(year: number): YearConfig {
+  return YEARS.find((y) => y.year === year) ?? YEARS.find((y) => y.year === DEFAULT_YEAR)!;
+}
+
+export function liveResultsUrlFor(year: number): string | null {
+  const c = configFor(year);
+  return c.eventId ? `https://my.raceresult.com/${c.eventId}/` : null;
+}

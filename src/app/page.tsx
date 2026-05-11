@@ -1,28 +1,11 @@
+"use client";
+
 import Link from "next/link";
 import { FollowedList } from "@/components/FollowedList";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { RESULTS_YEAR } from "@/lib/race";
-
-const LINKS = [
-  {
-    label: "Live results",
-    sub: `World's Toughest Mudder ${RESULTS_YEAR}`,
-    href: "https://my.raceresult.com/348237/",
-  },
-  {
-    label: "The OCR Report",
-    sub: "theocrreport.com",
-    href: "https://theocrreport.com/",
-  },
-  {
-    // Repurposed from a YouTube channel link — the live race feed sits here
-    // on race day, with the OCR Report YouTube channel reachable via the
-    // social icons row at the bottom of the page.
-    label: "Live race feed",
-    sub: "Race-day stream",
-    href: "https://www.youtube.com/@theocrreport/live",
-  },
-];
+import { YearPicker } from "@/components/YearPicker";
+import { useSelectedYear } from "@/hooks/useSelectedYear";
+import { configFor, liveResultsUrlFor } from "@/lib/years";
 
 const SOCIAL = [
   { label: "Facebook", href: "https://www.facebook.com/theocrreport", icon: FacebookIcon },
@@ -31,31 +14,73 @@ const SOCIAL = [
 ];
 
 export default function HomePage() {
+  const [year] = useSelectedYear();
+  const yearConfig = configFor(year);
+  const liveUrl = liveResultsUrlFor(year);
+
+  const links: Array<{ label: string; sub: string; href: string | null }> = [
+    {
+      label: "Live results",
+      sub: `World's Toughest Mudder ${year}`,
+      href: liveUrl,
+    },
+    {
+      label: "The OCR Report",
+      sub: "theocrreport.com",
+      href: "https://theocrreport.com/",
+    },
+    {
+      // Year-specific YouTube stream: race-day live for the current year,
+      // recorded broadcast for past years. Falls back to null + "link
+      // pending" when that year's URL hasn't been filled in yet.
+      label: "Live race feed",
+      sub: `${year} broadcast`,
+      href: yearConfig.liveStreamUrl,
+    },
+  ];
+
   return (
     <main className="mx-auto max-w-md px-4 pb-10 pt-6 space-y-6">
-      <header className="flex items-start justify-between gap-3">
-        <div className="space-y-1">
-          <div className="flex items-baseline gap-2">
-            <span
-              className="wtm-display text-4xl font-bold leading-none"
-              style={{ color: "var(--wtm-accent)" }}
-            >
-              WTM
-            </span>
-            <span className="wtm-display text-2xl leading-none opacity-80">
-              Tracker
-            </span>
+      <header className="space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1">
+            <div className="flex items-baseline gap-2">
+              <span
+                className="wtm-display text-4xl font-bold leading-none"
+                style={{ color: "var(--wtm-accent)" }}
+              >
+                WTM
+              </span>
+              <span className="wtm-display text-2xl leading-none opacity-80">
+                Tracker
+              </span>
+            </div>
+            <p className="text-xs uppercase tracking-[0.18em] opacity-50">
+              World&apos;s Toughest Mudder · {year}
+            </p>
+            <div
+              className="h-px w-12 mt-2"
+              style={{ background: "var(--wtm-accent)" }}
+            />
           </div>
-          <p className="text-xs uppercase tracking-[0.18em] opacity-50">
-            World&apos;s Toughest Mudder · {RESULTS_YEAR}
-          </p>
-          <div
-            className="h-px w-12 mt-2"
-            style={{ background: "var(--wtm-accent)" }}
-          />
+          <ThemeToggle />
         </div>
-        <ThemeToggle />
+        <YearPicker />
       </header>
+
+      {!yearConfig.hasData && (
+        <p
+          className="rounded-md px-3 py-2 text-xs"
+          style={{
+            border: "1px solid var(--wtm-accent)",
+            background: "var(--wtm-accent-dim)",
+          }}
+        >
+          Data for {year} isn&apos;t wired up yet — followed list and the
+          calculator still work, but live athlete data will be empty.
+          {liveUrl == null && " The live-results link is also pending the event id."}
+        </p>
+      )}
 
       <FollowedList />
 
@@ -116,33 +141,57 @@ export default function HomePage() {
         <p className="text-[10px] uppercase tracking-[0.18em] opacity-50 pl-1">
           External
         </p>
-        {LINKS.map((l) => (
-          <a
-            key={l.label}
-            href={l.href}
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center justify-between rounded-md px-4 py-3 transition-colors"
-            style={{
-              border: "1px solid var(--wtm-border)",
-              background: "var(--wtm-surface)",
-            }}
-          >
-            <span>
-              <p className="text-sm font-semibold uppercase tracking-wide">
-                {l.label}
-              </p>
-              <p className="text-[11px] opacity-50">{l.sub}</p>
-            </span>
-            <span
-              aria-hidden
-              className="text-sm font-bold"
-              style={{ color: "var(--wtm-accent)" }}
+        {links.map((l) => {
+          const disabled = !l.href;
+          const content = (
+            <>
+              <span>
+                <p className="text-sm font-semibold uppercase tracking-wide">
+                  {l.label}
+                </p>
+                <p className="text-[11px] opacity-50">
+                  {l.sub}
+                  {disabled && " (link pending)"}
+                </p>
+              </span>
+              <span
+                aria-hidden
+                className="text-sm font-bold"
+                style={{ color: disabled ? "var(--wtm-fg-muted)" : "var(--wtm-accent)" }}
+              >
+                ↗
+              </span>
+            </>
+          );
+          const baseStyle = {
+            border: "1px solid var(--wtm-border)",
+            background: "var(--wtm-surface)",
+            opacity: disabled ? 0.55 : 1,
+          };
+          if (!l.href) {
+            return (
+              <div
+                key={l.label}
+                className="flex items-center justify-between rounded-md px-4 py-3"
+                style={baseStyle}
+              >
+                {content}
+              </div>
+            );
+          }
+          return (
+            <a
+              key={l.label}
+              href={l.href}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center justify-between rounded-md px-4 py-3 transition-colors"
+              style={baseStyle}
             >
-              ↗
-            </span>
-          </a>
-        ))}
+              {content}
+            </a>
+          );
+        })}
       </nav>
 
       <footer className="pt-2 space-y-6">
