@@ -174,15 +174,14 @@ export default function HomePage() {
   );
 }
 
-// Theme-paired logo. Each variant lives at /public/logo-{light,dark}.png;
-// CSS swaps which one is visible based on the html[data-theme] attribute.
-// If the files are missing the broken-image icons make the gap obvious.
+// Theme-paired logo. CSS in globals.css swaps which one is visible based
+// on the html[data-theme] attribute.
 function BrandMark() {
   return (
     <div className="flex flex-col items-center select-none">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/logo-light.png"
+        src="/OCRR%20Small%20logo.png"
         alt="The OCR Report"
         width={200}
         height={200}
@@ -191,7 +190,7 @@ function BrandMark() {
       />
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/logo-dark.png"
+        src="/OCRR%20Small%20logo%20White.png"
         alt="The OCR Report"
         width={200}
         height={200}
