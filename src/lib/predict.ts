@@ -1,5 +1,31 @@
 import { LAP_MILES, RACE_END, RACE_START } from "./race";
 
+// Median lap-to-lap wall-clock ratios (pit + run) computed from
+// test/fixtures/lap_details_individual.csv across all 603 individual + team
+// member entrants in WTM 2025 Belvoir. Index k = the K→K+1 transition.
+//   k=0 → lap1 → lap2 (median 1.349 — partly the first pit being inserted)
+//   k=8 → lap9 → lap10 (median ~1.0; settled into pace)
+//   k>14 → small sample (n<32) — clipped to 1.0 to avoid late-race noise.
+// For athletes deeper than this table goes, fade stays at neutral.
+const FADE_RATIOS: number[] = [
+  1.349, 1.267, 1.146, 1.136, 1.145,
+  1.117, 1.094, 1.059, 1.002, 1.054,
+  0.993, 0.986, 1.010, 1.013, 0.988,
+];
+
+// Cumulative slowdown going from `fromLap` pace to lap K pace, based on
+// historical medians. Returns 1.0 when K <= fromLap or when off-table.
+export function fadeFactor(fromLap: number, toLap: number): number {
+  if (toLap <= fromLap) return 1;
+  let f = 1;
+  for (let k = fromLap; k < toLap; k++) {
+    const idx = k - 1; // FADE_RATIOS[0] is the 1→2 transition
+    if (idx < 0) continue;
+    f *= idx < FADE_RATIOS.length ? FADE_RATIOS[idx] : 1;
+  }
+  return f;
+}
+
 export type Prediction = {
   goalLaps: number;
   remainingLaps: number;
@@ -44,8 +70,15 @@ export function predict(opts: {
   }
 
   // Past elapsed time (totalSec) is what it is — only extrapolate the
-  // remaining laps at the trailing/current pace.
-  const finishSec = opts.totalSec + remaining * avg;
+  // remaining laps. Each remaining lap is scaled by its historical fade
+  // factor relative to the athlete's current pace, so an early-race
+  // projection accounts for the well-known initial slowdown (mostly the
+  // first pit settling in) instead of flat-extrapolating fresh-legs pace.
+  let projectedRemainingSec = 0;
+  for (let k = opts.laps + 1; k <= goalLaps; k++) {
+    projectedRemainingSec += avg * fadeFactor(opts.laps, k);
+  }
+  const finishSec = opts.totalSec + projectedRemainingSec;
   const finishMs = RACE_START.getTime() + finishSec * 1000;
 
   return {

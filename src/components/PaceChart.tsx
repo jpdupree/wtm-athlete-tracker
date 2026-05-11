@@ -4,7 +4,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db, type Lap } from "@/lib/db";
 import { useNow } from "@/hooks/useNow";
 import { LAP_MILES, LAST_LAP_START_CUTOFF, RACE_END, RACE_START } from "@/lib/race";
-import { paceStatus, type PaceStatus } from "@/lib/predict";
+import { fadeFactor, paceStatus, type PaceStatus } from "@/lib/predict";
 
 const W = 320;
 const H = 220;
@@ -181,15 +181,32 @@ export function PaceChart({
   const lastY = lastLapEndMiles;
   const lastX = lastLapEndSec;
 
-  let projectionEnd: { x: number; y: number } | null = null;
-  if (trailAvg && lastY < goalMiles) {
-    const slope = LAP_MILES / trailAvg;
-    const xToGoal = lastX + (goalMiles - lastY) / slope;
-    projectionEnd =
-      xToGoal <= windowSec
-        ? { x: xToGoal, y: goalMiles }
-        : { x: windowSec, y: lastY + (windowSec - lastX) * slope };
+  // Projection polyline: each remaining lap k is scaled by the historical
+  // fadeFactor relative to current lap N, so early-race projections bend
+  // upward instead of flat-extrapolating fresh-legs pace. Late-race fade
+  // ratios are ≈1.0, so the curve straightens out where the data says it
+  // should.
+  const goalLaps = Math.ceil(goalMiles / LAP_MILES);
+  const projectionPoints: Array<{ x: number; y: number }> = [];
+  if (trailAvg && lastY < goalMiles && laps > 0) {
+    let projElapsed = lastX;
+    for (let k = laps + 1; k <= goalLaps; k++) {
+      const lapDur = trailAvg * fadeFactor(laps, k);
+      const next = { x: projElapsed + lapDur, y: k * LAP_MILES };
+      if (next.x > windowSec) {
+        const prev = projectionPoints[projectionPoints.length - 1] ?? { x: lastX, y: lastY };
+        const frac = (windowSec - prev.x) / (next.x - prev.x);
+        projectionPoints.push({
+          x: windowSec,
+          y: prev.y + (next.y - prev.y) * Math.max(0, Math.min(1, frac)),
+        });
+        break;
+      }
+      projectionPoints.push(next);
+      projElapsed = next.x;
+    }
   }
+  const projectionEnd = projectionPoints[projectionPoints.length - 1] ?? null;
 
   const yMax = Math.max(goalMiles, projectionEnd?.y ?? 0, lastY) * 1.08;
 
@@ -379,14 +396,15 @@ export function PaceChart({
           />
         ))}
 
-        {/* Projection */}
-        {projectionEnd && (
+        {/* Projection — polyline from last completed lap through each
+            historically-faded projected lap end. */}
+        {projectionEnd && projectionPoints.length > 0 && (
           <>
-            <line
-              x1={sx(lastX)}
-              y1={sy(lastY)}
-              x2={sx(projectionEnd.x)}
-              y2={sy(projectionEnd.y)}
+            <path
+              d={`M ${sx(lastX).toFixed(1)} ${sy(lastY).toFixed(1)} ${projectionPoints
+                .map((p) => `L ${sx(p.x).toFixed(1)} ${sy(p.y).toFixed(1)}`)
+                .join(" ")}`}
+              fill="none"
               stroke="currentColor"
               strokeWidth="2"
               strokeDasharray="4 3"
