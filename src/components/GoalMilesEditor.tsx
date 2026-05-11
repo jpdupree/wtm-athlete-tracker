@@ -7,16 +7,29 @@ import { fmtSec } from "@/lib/format";
 import { pitStatus, pitStatusClass, sumPitSec } from "@/lib/intake";
 import { LAP_MILES } from "@/lib/race";
 
-// Accepts "5", "5:30", "05:30" — returns total seconds, or null on empty / bad.
+// Accepts MM:SS ("5:30") or decimal minutes ("5", "5.5", "0.5", ".75").
+// Returns total seconds rounded to the nearest second, or null on empty / bad.
 function parsePitInput(s: string): number | null {
   const trimmed = s.trim();
   if (!trimmed) return null;
-  const m = trimmed.match(/^(\d+)(?::(\d{1,2}))?$/);
-  if (!m) return null;
-  const mins = parseInt(m[1], 10);
-  const secs = m[2] != null ? parseInt(m[2], 10) : 0;
-  if (!Number.isFinite(mins) || !Number.isFinite(secs) || secs >= 60) return null;
-  return mins * 60 + secs;
+
+  // MM:SS form
+  const mmss = trimmed.match(/^(\d+):(\d{1,2})$/);
+  if (mmss) {
+    const mins = parseInt(mmss[1], 10);
+    const secs = parseInt(mmss[2], 10);
+    if (!Number.isFinite(mins) || !Number.isFinite(secs) || secs >= 60) return null;
+    return mins * 60 + secs;
+  }
+
+  // Decimal-minute form: "5", "5.5", ".5"
+  if (/^\d*\.?\d+$/.test(trimmed)) {
+    const mins = parseFloat(trimmed);
+    if (!Number.isFinite(mins) || mins < 0) return null;
+    return Math.round(mins * 60);
+  }
+
+  return null;
 }
 
 export function GoalMilesEditor({
@@ -125,13 +138,13 @@ export function GoalMilesEditor({
       </div>
       <div className="space-y-1">
         <label className="block text-xs uppercase tracking-wide opacity-60">
-          Goal pit time per stop (MM:SS)
+          Goal pit time per stop (MM:SS or minutes)
         </label>
         <input
-          inputMode="numeric"
+          inputMode="decimal"
           value={pitDraft}
           onChange={(e) => setPitDraft(e.target.value)}
-          placeholder="e.g. 5:00"
+          placeholder="e.g. 5:00 or 4.5"
           className="w-full rounded-md border border-current/20 bg-transparent px-2 py-1 text-lg tabular-nums"
         />
       </div>
