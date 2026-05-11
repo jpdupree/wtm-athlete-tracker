@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { use } from "react";
+import { use, useEffect, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { useAthleteRow } from "@/hooks/useAthleteRow";
@@ -29,23 +29,23 @@ export default function AthleteDetailPage({
   const followed = useLiveQuery(() => db.followed.get(bib), [bib]);
   const { row, loading, error, ageMs } = useAthleteRow(bib);
 
-  if (followed === undefined) {
+  // Some in-app webviews (FB Messenger, Instagram, etc.) sandbox their
+  // own IndexedDB so dexie either starts empty or hangs during init —
+  // either way the followed query never resolves to a useful value.
+  // After 3s, collapse "undefined" into "null" and let the page proceed
+  // to the "not followed" prompt instead of stalling on Loading…
+  const [loadTimedOut, setLoadTimedOut] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setLoadTimedOut(true), 3000);
+    return () => clearTimeout(t);
+  }, []);
+
+  if (followed === undefined && !loadTimedOut) {
     return <p className="p-6 text-sm opacity-50">Loading…</p>;
   }
 
   if (!followed) {
-    return (
-      <main className="mx-auto max-w-md px-4 py-6 space-y-3">
-        <Link href="/" className="text-sm opacity-70">← Home</Link>
-        <p className="text-sm">Bib #{bib} is not followed.</p>
-        <Link
-          href="/add"
-          className="inline-flex items-center justify-center rounded-md border border-current/40 px-4 py-2 text-sm font-medium"
-        >
-          Add athlete
-        </Link>
-      </main>
-    );
+    return <NotFollowedPrompt bib={bib} />;
   }
 
   const apiLaps = row?.laps ?? 0;
@@ -175,6 +175,54 @@ export default function AthleteDetailPage({
           </div>
         )}
       </section>
+    </main>
+  );
+}
+
+// Common in-app-webview UA tokens. These browsers tend to either deny
+// IndexedDB or hang dexie init, leading to the "stuck on Loading" report
+// when a shared link is opened from Messenger / Instagram / etc.
+function isInAppBrowser(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /\b(FBAN|FBAV|FBIOS|FB_IAB|FB4A|Instagram|LinkedInApp|Line|MicroMessenger|musical_ly|BytedanceWebview|TwitterAndroid)\b/i.test(
+    navigator.userAgent,
+  );
+}
+
+function NotFollowedPrompt({ bib }: { bib: number }) {
+  const [inApp, setInApp] = useState(false);
+  useEffect(() => {
+    setInApp(isInAppBrowser());
+  }, []);
+
+  return (
+    <main className="mx-auto max-w-md px-4 py-6 space-y-3">
+      <Link
+        href="/"
+        className="inline-flex items-center gap-1 text-xs uppercase tracking-wider opacity-60 hover:opacity-100"
+      >
+        <span style={{ color: "var(--wtm-accent)" }}>←</span> Home
+      </Link>
+      <p className="text-sm">Bib #{bib} is not followed on this device.</p>
+      {inApp && (
+        <p
+          className="rounded-md px-3 py-2 text-xs"
+          style={{
+            border: "1px solid var(--wtm-accent)",
+            background: "var(--wtm-accent-dim)",
+          }}
+        >
+          You&apos;re viewing this in an in-app browser, which keeps its own
+          (empty) storage. To see athletes you&apos;ve already followed, tap
+          the menu in the corner and choose &ldquo;Open in browser&rdquo;.
+        </p>
+      )}
+      <Link
+        href="/add"
+        className="inline-flex items-center justify-center rounded-md border border-current/40 px-4 py-2 text-sm font-medium"
+      >
+        Add athlete
+      </Link>
     </main>
   );
 }
