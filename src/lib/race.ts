@@ -14,4 +14,4 @@ export const LAP_MILES = 5;
 // athlete's summary state (laps, totalSec, lastSeen) is recomputed from
 // whatever they had crossed by then. Useful for testing the mid-race UI.
 // Set to null to use the full end-of-race data.
-export const SIM_RACE_ELAPSED_SEC: number | null = 20 * 3600;
+export const SIM_RACE_ELAPSED_SEC: number | null = null;
