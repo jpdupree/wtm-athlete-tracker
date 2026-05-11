@@ -79,9 +79,9 @@ export type PitStatus = "green" | "amber" | "red" | "none";
 // Returns "none" when no goal is set; callers should render neutral in that
 // case rather than fall back to a hardcoded threshold.
 //   green: at or under goal
-//   amber: over goal but within 2.5%
-//   red:   over goal by more than 2.5%
-const PIT_AMBER_OVER = 1.025;
+//   amber: over goal but within 5%
+//   red:   over goal by more than 5%
+const PIT_AMBER_OVER = 1.05;
 
 export function pitStatus(
   pitSec: number,
