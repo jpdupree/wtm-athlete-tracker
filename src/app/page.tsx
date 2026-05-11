@@ -181,19 +181,19 @@ function BrandMark() {
     <div className="flex flex-col items-center select-none">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/OCRR%20Small%20logo.png"
+        src="/logo-light.png"
         alt="The OCR Report"
-        width={200}
-        height={200}
+        width={512}
+        height={512}
         className="wtm-logo-light h-20 w-auto"
         loading="lazy"
       />
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/OCRR%20Small%20logo%20White.png"
+        src="/logo-dark.png"
         alt="The OCR Report"
-        width={200}
-        height={200}
+        width={512}
+        height={512}
         className="wtm-logo-dark h-20 w-auto"
         loading="lazy"
       />
