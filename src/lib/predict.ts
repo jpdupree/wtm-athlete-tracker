@@ -104,6 +104,50 @@ export function predict(opts: {
   };
 }
 
+// Recommended per-pit budget to hit goalMiles within the race window,
+// given the athlete's current state and trailing running pace (the lap
+// time WITHOUT pit). Uses the same fade table as predict() so projected
+// running time accounts for the historical slowdown.
+//
+//   recommended_pit = (time_left - sum_remaining(avg_run * fade)) / remaining_pits
+//
+// Returns null when there's no goal, no laps to anchor pace, or the
+// race window has already closed. Returns a NEGATIVE number when the
+// athlete can't hit the goal even with zero pits — useful as a signal
+// that the budget has run out (callers can show that as "—" or red).
+export function recommendPitSec(opts: {
+  goalMiles: number | null;
+  laps: number;
+  totalSec: number;
+  lapRunSecs: number[]; // running-only seconds per completed lap (no pit)
+  trail?: number;
+}): number | null {
+  if (opts.goalMiles == null || opts.laps <= 0 || opts.totalSec <= 0) return null;
+  if (opts.lapRunSecs.length === 0) return null;
+
+  const goalLaps = Math.ceil(opts.goalMiles / LAP_MILES);
+  const remaining = goalLaps - opts.laps;
+  if (remaining <= 0) return null;
+
+  const raceWindowSec = (RACE_END.getTime() - RACE_START.getTime()) / 1000;
+  const timeLeft = raceWindowSec - opts.totalSec;
+  if (timeLeft <= 0) return null;
+
+  const trail = Math.max(1, opts.trail ?? 3);
+  const recent = opts.lapRunSecs.slice(-trail);
+  const avgRun = recent.reduce((s, x) => s + x, 0) / recent.length;
+
+  let fadeSum = 0;
+  for (let k = opts.laps + 1; k <= goalLaps; k++) {
+    fadeSum += fadeFactor(opts.laps, k);
+  }
+  const projectedRunSec = avgRun * fadeSum;
+
+  // Each remaining lap is preceded by a pit (assume the athlete is about
+  // to enter the next pit), so remaining pits = remaining laps.
+  return (timeLeft - projectedRunSec) / remaining;
+}
+
 export type PaceStatus = "green" | "amber" | "red";
 
 // Comfortable buffer over the race-end cutoff. Tight finishes flip amber.

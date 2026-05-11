@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { fmtSec } from "@/lib/format";
 import { pitStatus, pitStatusClass, sumPitSec } from "@/lib/intake";
 import { LAP_MILES } from "@/lib/race";
+import { useEffectivePitSec } from "@/hooks/useEffectivePitSec";
 
 // Accepts MM:SS ("5:30") or decimal minutes ("5", "5.5", "0.5", ".75").
 // Returns total seconds rounded to the nearest second, or null on empty / bad.
@@ -53,12 +54,30 @@ export function GoalMilesEditor({
   ).length;
   const avgPitSec = pitCount > 0 ? sumPitSec(lapRows ?? []) / pitCount : null;
 
+  // The "effective" pit budget — user override if set, otherwise auto-
+  // recommendation derived from goal + current state. Used both for
+  // display and for coloring avgPitSec.
+  const effective = useEffectivePitSec(bib);
+
   if (!editing) {
+    const targetSec = effective.sec;
     const pitColorStatus =
-      goalPitSec != null && avgPitSec != null
-        ? pitStatus(avgPitSec, goalPitSec)
+      targetSec != null && targetSec > 0 && avgPitSec != null
+        ? pitStatus(avgPitSec, targetSec)
         : "none";
     const pitColor = pitColorStatus === "none" ? "" : pitStatusClass(pitColorStatus);
+    const targetLabel =
+      effective.source === "override"
+        ? "Pit goal"
+        : effective.source === "recommended"
+          ? "Pit budget"
+          : "Pit";
+    const targetSuffix =
+      effective.source === "recommended" ? (
+        <span className="opacity-60"> (auto)</span>
+      ) : effective.source === "override" ? (
+        <span className="opacity-60"> (set)</span>
+      ) : null;
     return (
       <button
         onClick={() => {
@@ -74,12 +93,13 @@ export function GoalMilesEditor({
             ? `${goalMiles} mi · ${Math.ceil(goalMiles / LAP_MILES)} laps`
             : "Tap to set"}
         </p>
-        {(goalPitSec != null || avgPitSec != null) && (
+        {(targetSec != null || avgPitSec != null) && (
           <p className="text-xs opacity-80 tabular-nums">
-            Pit goal:{" "}
+            {targetLabel}:{" "}
             <span className="font-medium">
-              {goalPitSec != null ? fmtSec(goalPitSec) : "—"}
+              {targetSec != null && targetSec > 0 ? fmtSec(Math.round(targetSec)) : "—"}
             </span>
+            {targetSuffix}
             {avgPitSec != null && (
               <>
                 {" · "}avg{" "}
@@ -103,19 +123,23 @@ export function GoalMilesEditor({
     );
   }
 
+  // Editor: show the auto-recommendation as input placeholder so the user
+  // can see what they'd get by leaving the field blank.
+  const recPlaceholder =
+    effective.source === "recommended" && effective.sec != null && effective.sec > 0
+      ? `auto: ${fmtSec(Math.round(effective.sec))}`
+      : "leave blank for auto";
+
   return (
     <form
       onSubmit={async (e) => {
         e.preventDefault();
         const miles = milesDraft.trim() ? parseInt(milesDraft, 10) : null;
         const pit = pitDraft.trim() ? parsePitInput(pitDraft) : null;
-        // Always close the form; if the write fails (e.g. IDB blocked
-        // mid-poll), we still want the user out of the editing state and
-        // can surface the error elsewhere rather than leaving them stuck.
         try {
           await db.followed.update(bib, {
             goalMiles: miles != null && Number.isFinite(miles) ? miles : null,
-            goalPitSec: pit,
+            goalPitSec: pit, // null clears the override and falls back to auto
           });
         } finally {
           setEditing(false);
@@ -138,15 +162,20 @@ export function GoalMilesEditor({
       </div>
       <div className="space-y-1">
         <label className="block text-xs uppercase tracking-wide opacity-60">
-          Goal pit time per stop (MM:SS or minutes)
+          Pit goal override (MM:SS or minutes)
         </label>
         <input
           inputMode="decimal"
           value={pitDraft}
           onChange={(e) => setPitDraft(e.target.value)}
-          placeholder="e.g. 5:00 or 4.5"
+          placeholder={recPlaceholder}
           className="w-full rounded-md border border-current/20 bg-transparent px-2 py-1 text-lg tabular-nums"
         />
+        <p className="text-[11px] opacity-60 leading-snug">
+          Leave blank to use the recommended budget — auto-computed from
+          your goal and current pace. Set a value here to lock in a
+          personal target instead.
+        </p>
       </div>
       <div className="flex gap-2">
         <button

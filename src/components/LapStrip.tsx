@@ -5,14 +5,19 @@ import { db } from "@/lib/db";
 import { fmtSec } from "@/lib/format";
 import { pitStatus, pitStatusClass } from "@/lib/intake";
 import { RACE_START } from "@/lib/race";
+import { useEffectivePitSec } from "@/hooks/useEffectivePitSec";
 
 export function LapStrip({ bib, lapCount }: { bib: number; lapCount: number }) {
   const lapRows = useLiveQuery(
     () => db.laps.where("bib").equals(bib).sortBy("lapNumber"),
     [bib],
   );
-  const followed = useLiveQuery(() => db.followed.get(bib), [bib]);
-  const goalPitSec = followed?.goalPitSec ?? null;
+  // Single source of truth for the pit threshold — user override OR the
+  // auto-recommendation. Color each past pit relative to the *current*
+  // budget so the strip tells the crew at a glance which pits, if
+  // repeated, would still be sustainable for the goal.
+  const effectivePit = useEffectivePitSec(bib);
+  const targetPitSec = effectivePit.sec ?? null;
 
   if (lapCount === 0) return null;
 
@@ -56,7 +61,7 @@ export function LapStrip({ bib, lapCount }: { bib: number; lapCount: number }) {
               {it.pitSec != null && (
                 <p
                   className={`text-[10px] tabular-nums ${pitStatusClass(
-                    pitStatus(it.pitSec, goalPitSec),
+                    pitStatus(it.pitSec, targetPitSec),
                   )}`}
                 >
                   pit {fmtSec(Math.round(it.pitSec))}
