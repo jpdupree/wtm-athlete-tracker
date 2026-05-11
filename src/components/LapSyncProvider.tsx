@@ -20,24 +20,26 @@ export function LapSyncProvider({ children }: { children: React.ReactNode }) {
   }, [data, followed]);
 
   // Passings sync — full per-lap history. Runs on mount and any time the
-  // overall poll fires (so newly-completed laps fill in their timestamps).
+  // overall poll fires. Fan out in parallel so adding more followed athletes
+  // doesn't multiply latency: 10 sequential round trips over a slow tunnel
+  // can stall the UI for several seconds.
   useEffect(() => {
     if (!followed?.length) return;
     let cancelled = false;
-    void (async () => {
-      for (const a of followed) {
+    void Promise.all(
+      followed.map(async (a) => {
         if (cancelled) return;
         try {
           const res = await fetch(`/api/passings/${a.bib}`, { cache: "no-store" });
-          if (!res.ok) continue;
+          if (!res.ok) return;
           const body = (await res.json()) as PassingsResponse;
           if (cancelled) return;
           await syncBibLapsFromPassings(a.bib, body.passings);
         } catch {
           /* swallow — best-effort */
         }
-      }
-    })();
+      }),
+    );
     return () => {
       cancelled = true;
     };
