@@ -6,18 +6,21 @@ import { recommendPitSec } from "@/lib/predict";
 import { RACE_START } from "@/lib/race";
 
 export type EffectivePitSec = {
-  // Number of seconds per pit, or null when no goal / no laps yet / race
-  // window has closed.
+  // Effective per-pit target: user override if set, otherwise the auto
+  // recommendation. null when no goal / no laps yet / race window closed.
   sec: number | null;
-  // Whether this came from the user-set override or the auto recommendation.
-  // null when sec is null.
+  // The auto recommendation only, regardless of whether an override is set.
+  // Useful for places that should color against the *math*, not the user's
+  // personal goal — e.g. per-lap pit cards.
+  autoSec: number | null;
+  // Whether `sec` came from the user-set override or the auto recommendation.
   source: "override" | "recommended" | null;
 };
 
 // Single source of truth for "what should a pit be?" — used by both the
 // goal section header (display) and the pit-color logic (LapStrip,
-// LapCard). When the followed athlete has a goalPitSec override set, that
-// wins; otherwise we compute the recommendation from current state.
+// LapCard). Returns BOTH the effective value (override > auto) and the raw
+// auto recommendation so consumers can choose which one to color against.
 export function useEffectivePitSec(bib: number): EffectivePitSec {
   const followed = useLiveQuery(() => db.followed.get(bib), [bib]);
   const laps = useLiveQuery(
@@ -25,15 +28,16 @@ export function useEffectivePitSec(bib: number): EffectivePitSec {
     [bib],
   );
 
-  if (!followed) return { sec: null, source: null };
-
-  // User override wins.
-  if (followed.goalPitSec != null && followed.goalPitSec > 0) {
-    return { sec: followed.goalPitSec, source: "override" };
-  }
-
+  if (!followed) return { sec: null, autoSec: null, source: null };
   if (followed.goalMiles == null || !laps) {
-    return { sec: null, source: null };
+    const override = followed.goalPitSec != null && followed.goalPitSec > 0
+      ? followed.goalPitSec
+      : null;
+    return {
+      sec: override,
+      autoSec: null,
+      source: override != null ? "override" : null,
+    };
   }
 
   // Derive lap-run-only durations from the lap rows. Wall-clock per lap
@@ -41,30 +45,42 @@ export function useEffectivePitSec(bib: number): EffectivePitSec {
   const completed = laps.filter(
     (l): l is typeof l & { lapCompletedAt: string } => !!l.lapCompletedAt,
   );
-  if (completed.length === 0) return { sec: null, source: null };
 
-  const lapRunSecs: number[] = [];
-  let prevEndMs = RACE_START.getTime();
-  for (const l of completed) {
-    const endMs = new Date(l.lapCompletedAt).getTime();
-    const wallClockSec = (endMs - prevEndMs) / 1000;
-    let pitSec = 0;
-    if (l.pitStartedAt && l.pitCompletedAt) {
-      pitSec =
-        (new Date(l.pitCompletedAt).getTime() - new Date(l.pitStartedAt).getTime()) /
-        1000;
+  let autoSec: number | null = null;
+  if (completed.length > 0) {
+    const lapRunSecs: number[] = [];
+    let prevEndMs = RACE_START.getTime();
+    for (const l of completed) {
+      const endMs = new Date(l.lapCompletedAt).getTime();
+      const wallClockSec = (endMs - prevEndMs) / 1000;
+      let pitSec = 0;
+      if (l.pitStartedAt && l.pitCompletedAt) {
+        pitSec =
+          (new Date(l.pitCompletedAt).getTime() -
+            new Date(l.pitStartedAt).getTime()) /
+          1000;
+      }
+      lapRunSecs.push(Math.max(0, wallClockSec - pitSec));
+      prevEndMs = endMs;
     }
-    lapRunSecs.push(Math.max(0, wallClockSec - pitSec));
-    prevEndMs = endMs;
+    const totalSec = (prevEndMs - RACE_START.getTime()) / 1000;
+    autoSec = recommendPitSec({
+      goalMiles: followed.goalMiles,
+      laps: completed.length,
+      totalSec,
+      lapRunSecs,
+    });
   }
-  const totalSec = (prevEndMs - RACE_START.getTime()) / 1000;
 
-  const rec = recommendPitSec({
-    goalMiles: followed.goalMiles,
-    laps: completed.length,
-    totalSec,
-    lapRunSecs,
-  });
+  // User override wins for the effective value, but autoSec is always
+  // exposed independently so per-card displays can color against it.
+  if (followed.goalPitSec != null && followed.goalPitSec > 0) {
+    return { sec: followed.goalPitSec, autoSec, source: "override" };
+  }
 
-  return { sec: rec, source: rec != null ? "recommended" : null };
+  return {
+    sec: autoSec,
+    autoSec,
+    source: autoSec != null ? "recommended" : null,
+  };
 }

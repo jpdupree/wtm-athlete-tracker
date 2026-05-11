@@ -5,8 +5,10 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db, type FuelEntry, type Note } from "@/lib/db";
 import { lapId, markLapManual } from "@/lib/lapSync";
 import { fmtSec, fmtVenueClock } from "@/lib/format";
+import { pitStatus, pitStatusClass } from "@/lib/intake";
 import { paceStatus, type PaceStatus } from "@/lib/predict";
 import { RACE_START } from "@/lib/race";
+import { useEffectivePitSec } from "@/hooks/useEffectivePitSec";
 
 type Target = "lap" | "pit";
 
@@ -182,12 +184,6 @@ function deltaColor(sec: number): string {
   return "text-amber-500";
 }
 
-function pitColor(sec: number): string {
-  if (sec <= 15 * 60) return "text-green-500";
-  if (sec <= 25 * 60) return "text-amber-500";
-  return "text-red-500";
-}
-
 function PitTimer({ bib, lapNumber }: { bib: number; lapNumber: number }) {
   const lap = useLiveQuery(() => db.laps.get(lapId(bib, lapNumber)), [bib, lapNumber]);
   const start = lap?.pitStartedAt;
@@ -196,6 +192,14 @@ function PitTimer({ bib, lapNumber }: { bib: number; lapNumber: number }) {
     start && end
       ? Math.round((new Date(end).getTime() - new Date(start).getTime()) / 1000)
       : null;
+  // Color the pit duration against the AUTO recommendation, regardless
+  // of whether the athlete has a personal pit-goal override set. The
+  // per-card view is meant to reflect the math, not the manual target.
+  const { autoSec } = useEffectivePitSec(bib);
+  const colorClass =
+    durationSec != null
+      ? pitStatusClass(pitStatus(durationSec, autoSec))
+      : "";
   return (
     <div className="px-4 py-3 space-y-2">
       <p className="text-xs uppercase tracking-wide opacity-60">Pit {lapNumber} timing</p>
@@ -206,7 +210,7 @@ function PitTimer({ bib, lapNumber }: { bib: number; lapNumber: number }) {
           </span>
         )}
         {end && (
-          <span className={`tabular-nums ${durationSec != null ? pitColor(durationSec) : ""}`}>
+          <span className={`tabular-nums ${colorClass}`}>
             out {fmtVenueClock(end)}
             {durationSec != null && ` · ${fmtSec(durationSec)}`}
           </span>
