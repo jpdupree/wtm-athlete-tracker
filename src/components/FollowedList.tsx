@@ -98,9 +98,9 @@ function Verdict({ verdict }: { verdict: V }) {
     return <span className="text-[10px] uppercase tracking-wide opacity-40">—</span>;
   }
   const styles: Record<Exclude<V, "no-goal" | "no-data">, string> = {
-    "on-pace": "border-green-500/50 bg-green-500/10 text-green-700 dark:text-green-300",
+    "on-pace": "border-green-600/50 bg-green-500/10 text-green-800 dark:text-green-300",
     behind: "border-red-500/50 bg-red-500/10 text-red-700 dark:text-red-300",
-    reached: "border-green-600/50 bg-green-600/15 text-green-800 dark:text-green-200",
+    reached: "border-green-700/50 bg-green-600/15 text-green-900 dark:text-green-200",
   };
   const text: Record<Exclude<V, "no-goal" | "no-data">, string> = {
     "on-pace": "On pace",

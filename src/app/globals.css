@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* Rebind Tailwind's `dark:` variant to our explicit data-theme attribute
+   instead of the OS `prefers-color-scheme` media query. Otherwise a user
+   on a dark-mode phone who toggles light still sees the dark: classes
+   apply, defeating the toggle. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 /* WTM brand tokens — both themes use the same orange accent so semantic
    colors (green/amber/red used for pace status) and brand color stay
    stable regardless of light/dark choice. */
