@@ -33,7 +33,8 @@ export async function syncBibLaps(row: Athlete): Promise<void> {
 
 // Full per-lap history from the passings feed. Unlike syncBibLaps which only
 // stamps the latest lap, this stamps every lap that has a passing — fixing
-// cold-load gaps for older laps.
+// cold-load gaps for older laps. When the passing carries pitSec/lapSec, we
+// also stamp the pit + lap windows so StatsGrid / LapStrip can show pit times.
 export async function syncBibLapsFromPassings(
   bib: number,
   passings: Passing[],
@@ -41,21 +42,46 @@ export async function syncBibLapsFromPassings(
   for (const p of passings) {
     const id = lapId(bib, p.lapNumber);
     const prior = await db.laps.get(id);
+
+    // Compute window timestamps from durations when we have them.
+    // For lap N: completedAt is the end; lapStartedAt = completedAt - lapSec;
+    // pitCompletedAt = lapStartedAt; pitStartedAt = pitCompletedAt - pitSec.
+    let lapStartedAt = prior?.lapStartedAt ?? null;
+    let pitStartedAt = prior?.pitStartedAt ?? null;
+    let pitCompletedAt = prior?.pitCompletedAt ?? null;
+    if (p.lapSec != null) {
+      const endMs = new Date(p.completedAt).getTime();
+      const lapStartMs = endMs - p.lapSec * 1000;
+      lapStartedAt = new Date(lapStartMs).toISOString();
+      if (p.pitSec != null && p.pitSec > 0) {
+        pitCompletedAt = lapStartedAt;
+        pitStartedAt = new Date(lapStartMs - p.pitSec * 1000).toISOString();
+      } else if (p.pitSec === 0) {
+        // Explicit "no pit before this lap" (e.g. lap 1). Clear stale data.
+        pitStartedAt = null;
+        pitCompletedAt = null;
+      }
+    }
+
     if (
       prior?.source === "api" &&
       !prior.provisional &&
-      prior.lapCompletedAt === p.completedAt
+      prior.lapCompletedAt === p.completedAt &&
+      prior.lapStartedAt === lapStartedAt &&
+      prior.pitStartedAt === pitStartedAt &&
+      prior.pitCompletedAt === pitCompletedAt
     ) {
       continue;
     }
+
     const next: Lap = {
       id,
       bib,
       lapNumber: p.lapNumber,
-      lapStartedAt: prior?.lapStartedAt ?? null,
+      lapStartedAt,
       lapCompletedAt: p.completedAt,
-      pitStartedAt: prior?.pitStartedAt ?? null,
-      pitCompletedAt: prior?.pitCompletedAt ?? null,
+      pitStartedAt,
+      pitCompletedAt,
       source: "api",
       provisional: false,
     };

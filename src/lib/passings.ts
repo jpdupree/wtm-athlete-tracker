@@ -52,6 +52,10 @@ function normalizePassing(r: RawPassing): Passing | null {
     lapNumber,
     elapsedSec: elapsedSec ?? (new Date(completedAt).getTime() - RACE_START.getTime()) / 1000,
     completedAt,
+    // Upstream RawPassing doesn't expose pit / lap durations directly; the
+    // fixtures path supplies them. Leave null when not available.
+    pitSec: null,
+    lapSec: null,
   };
 }
 

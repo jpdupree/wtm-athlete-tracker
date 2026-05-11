@@ -216,7 +216,8 @@ export async function getAllPassings(): Promise<Passing[]> {
     for (const lap of laps) {
       const lapNumber = toInt(lap.LapNum);
       if (!lapNumber) continue;
-      const pitSec = parseHmsToSec(lap.PitTime) ?? 0;
+      // Lap 1's PitTime is a literal " - " — treat as no prior pit.
+      const pitSec = lapNumber === 1 ? 0 : (parseHmsToSec(lap.PitTime) ?? 0);
       const lapSec = parseHmsToSec(lap.LapTime) ?? 0;
       elapsedSec += pitSec + lapSec;
       passings.push({
@@ -224,6 +225,8 @@ export async function getAllPassings(): Promise<Passing[]> {
         lapNumber,
         elapsedSec,
         completedAt: new Date(RACE_START.getTime() + elapsedSec * 1000).toISOString(),
+        pitSec,
+        lapSec,
       });
     }
   }

@@ -57,6 +57,10 @@ export type Passing = {
   lapNumber: number;
   elapsedSec: number;
   completedAt: string; // ISO
+  // Seconds spent in the pit BEFORE this lap (0 for lap 1, null if unknown).
+  pitSec: number | null;
+  // Running duration of this lap in seconds (null if unknown).
+  lapSec: number | null;
 };
 
 export type PassingsResponse = {
