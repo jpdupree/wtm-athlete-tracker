@@ -4,6 +4,7 @@ import "./globals.css";
 import { FeedProvider } from "@/components/FeedProvider";
 import { LapSyncProvider } from "@/components/LapSyncProvider";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
+import { RESULTS_YEAR } from "@/lib/race";
 
 const displayFont = Bebas_Neue({
   subsets: ["latin"],
@@ -13,7 +14,7 @@ const displayFont = Bebas_Neue({
 
 export const metadata: Metadata = {
   title: "WTM Athlete Tracker",
-  description: "Follow athletes at World's Toughest Mudder 2026",
+  description: `Follow athletes at World's Toughest Mudder ${RESULTS_YEAR}`,
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "WTM" },
   icons: { icon: "/icon.svg", apple: "/icon.svg" },

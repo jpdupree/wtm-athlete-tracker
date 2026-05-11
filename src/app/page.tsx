@@ -1,10 +1,7 @@
 import Link from "next/link";
 import { FollowedList } from "@/components/FollowedList";
 import { ThemeToggle } from "@/components/ThemeToggle";
-
-// Year of the results currently linked. Bump when wiring the next event;
-// also bump the live-results URL below to the new event id.
-const RESULTS_YEAR = 2025;
+import { RESULTS_YEAR } from "@/lib/race";
 
 const LINKS = [
   {
@@ -50,7 +47,7 @@ export default function HomePage() {
             </span>
           </div>
           <p className="text-xs uppercase tracking-[0.18em] opacity-50">
-            World&apos;s Toughest Mudder · 27 Jun 2026
+            World&apos;s Toughest Mudder · {RESULTS_YEAR}
           </p>
           <div
             className="h-px w-12 mt-2"
