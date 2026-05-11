@@ -7,7 +7,12 @@
 // Bump CACHE when the SHELL list or the caching strategy changes — the
 // activate handler deletes any older caches so the new shell wins.
 
-const CACHE = "wtm-v4";
+const CACHE = "wtm-v5";
+
+// Offline fallback HTML for an athlete page that hasn't been warmed into
+// the cache. Self-contained — inlines its own styles so it doesn't depend
+// on any Next.js chunks (which won't have loaded either).
+const OFFLINE_ATHLETE_HTML = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Athlete not cached · WTM Tracker</title><style>:root{color-scheme:dark}html,body{background:#0a0a0a;color:#f5f5f4;margin:0;font-family:-apple-system,system-ui,sans-serif}main{max-width:28rem;margin:0 auto;padding:1.5rem 1rem;line-height:1.4}.back{display:inline-flex;align-items:center;gap:.25rem;color:#a3a3a3;text-decoration:none;font-size:.7rem;letter-spacing:.1em;text-transform:uppercase}.back .arrow{color:#ff6b14}.callout{margin-top:1.25rem;padding:.75rem 1rem;border:1px solid #ff6b14;background:rgba(255,107,20,.18);border-radius:.5rem}.callout h1{margin:0 0 .5rem;font-size:1rem}.callout p{margin:.25rem 0;font-size:.8rem;opacity:.85}.actions{margin-top:1rem}.btn{display:inline-block;padding:.6rem 1rem;border:1px solid rgba(255,255,255,.4);border-radius:.4rem;text-decoration:none;color:#f5f5f4;font-size:.8rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em}</style></head><body><main><a class="back" href="/"><span class="arrow">←</span> Home</a><div class="callout"><h1>Athlete not cached</h1><p>This athlete's data hasn't been loaded for offline use yet.</p><p>Open this page once while you have a connection — then it'll work offline too.</p></div><div class="actions"><a class="btn" href="/">Back to followed list</a></div></main></body></html>`;
 const SHELL = [
   "/",
   "/add",
@@ -64,18 +69,18 @@ self.addEventListener("fetch", (e) => {
     return;
   }
 
-  // Athlete detail pages — /a/<bib> — are dynamic so they can't be in the
-  // pre-cached shell. Cache-first when possible, but if we're offline and
-  // this specific bib isn't cached, fall back to ANY cached /a/<bib>
-  // shell: the page is a client component that re-renders from the URL +
-  // dexie + cached API on hydration, so one cached shell is enough to
-  // bootstrap any bib offline. The followed list also proactively warms
-  // each followed athlete's URL into the cache on every sync.
+  // Athlete detail pages — /a/<bib> — are dynamic so they can't be in
+  // the pre-cached shell. Cache-first when possible; on a miss, try the
+  // network; if THAT also fails (offline + never visited this bib),
+  // return a small self-contained "not cached" HTML rather than another
+  // athlete's HTML — falling back to a different bib's cached response
+  // caused the wrong athlete to load with the requested URL in the bar.
   if (url.pathname.startsWith("/a/")) {
     e.respondWith(
       caches.match(e.request).then(async (cached) => {
         if (cached) {
-          // Refresh in background so the next online hit is fresh.
+          // Stale-while-revalidate: refresh in the background so the next
+          // online hit gets fresh HTML (after a redeploy).
           fetch(e.request)
             .then((res) => {
               if (res.ok) {
@@ -94,18 +99,10 @@ self.addEventListener("fetch", (e) => {
           }
           return res;
         } catch {
-          const cache = await caches.open(CACHE);
-          const keys = await cache.keys();
-          for (const k of keys) {
-            if (new URL(k.url).pathname.startsWith("/a/")) {
-              const r = await cache.match(k);
-              if (r) return r;
-            }
-          }
-          return (
-            (await caches.match("/")) ??
-            new Response("Offline", { status: 503 })
-          );
+          return new Response(OFFLINE_ATHLETE_HTML, {
+            status: 200,
+            headers: { "content-type": "text/html; charset=utf-8" },
+          });
         }
       }),
     );
