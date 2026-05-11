@@ -360,6 +360,25 @@ function FollowCTA({
 // athlete not in the published slice). Distinct from "exists but you
 // don't follow them".
 function NotInFeed({ bib }: { bib: number }) {
+  // Distinguish three cases:
+  //   1. Offline + this bib was never warmed into the cache → tell the
+  //      user to view it once while online
+  //   2. Online + feed doesn't carry this bib → real "wrong link / typo"
+  //   3. Mid-transition (e.g., navigator.onLine flipped during navigation)
+  //      → treat like #1 since the remedy is the same
+  const [isOnline, setIsOnline] = useState(true);
+  useEffect(() => {
+    if (typeof navigator !== "undefined") setIsOnline(navigator.onLine);
+    const on = () => setIsOnline(true);
+    const off = () => setIsOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => {
+      window.removeEventListener("online", on);
+      window.removeEventListener("offline", off);
+    };
+  }, []);
+
   return (
     <main className="mx-auto max-w-md px-4 py-6 space-y-3">
       <Link
@@ -368,13 +387,27 @@ function NotInFeed({ bib }: { bib: number }) {
       >
         <span style={{ color: "var(--wtm-accent)" }}>←</span> Home
       </Link>
-      <p
-        className="rounded-md px-3 py-2 text-sm"
-        style={{ border: "1px solid var(--wtm-border-strong)", background: "var(--wtm-surface)" }}
-      >
-        No athlete found for bib #{bib}. Double-check the link, or
-        return home to search.
-      </p>
+      {isOnline ? (
+        <p
+          className="rounded-md px-3 py-2 text-sm"
+          style={{ border: "1px solid var(--wtm-border-strong)", background: "var(--wtm-surface)" }}
+        >
+          No athlete found for bib #{bib}. Double-check the link, or
+          return home to search.
+        </p>
+      ) : (
+        <div
+          className="rounded-md px-3 py-2 text-sm space-y-2"
+          style={{ border: "1px solid var(--wtm-accent)", background: "var(--wtm-accent-dim)" }}
+        >
+          <p className="font-semibold">Bib #{bib} hasn&apos;t been loaded yet.</p>
+          <p className="text-xs opacity-80">
+            This athlete&apos;s data wasn&apos;t cached for offline use. Open
+            this page once while you have a connection — then it&apos;ll work
+            offline too.
+          </p>
+        </div>
+      )}
     </main>
   );
 }
