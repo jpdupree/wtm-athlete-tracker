@@ -4,7 +4,8 @@ import { FollowedList } from "@/components/FollowedList";
 // External link URLs are placeholders — fill these in once the public RaceResult URL,
 // theocrreport.com page, and OCR Report YouTube channel are confirmed.
 const LINKS = [
-  { label: "Live results (RaceResult)", href: "#" },
+  // Pointing at the 2025 event for now until the 2026 page goes live.
+  { label: "Live results (RaceResult)", href: "https://my.raceresult.com/348237/" },
   { label: "theocrreport.com", href: "#" },
   { label: "OCR Report YouTube", href: "#" },
 ];
