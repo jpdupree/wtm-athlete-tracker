@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { RACE_START } from "./race";
+import { LAP_MILES, RACE_START, SIM_RACE_ELAPSED_SEC } from "./race";
 import type { Athlete, Passing, Slice } from "./types";
 
 const FIXTURES_DIR = path.join(process.cwd(), "test", "fixtures");
@@ -55,26 +55,6 @@ function parseHmsToSec(s: string | null | undefined): number | null {
   return null;
 }
 
-function parseTodToISO(tod: string | null | undefined): string | null {
-  if (!tod) return null;
-  const m = tod.match(/^(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)$/i);
-  if (!m) return null;
-  let h = parseInt(m[1], 10);
-  const mi = parseInt(m[2], 10);
-  const s = parseInt(m[3], 10);
-  if (m[4].toUpperCase() === "PM" && h !== 12) h += 12;
-  if (m[4].toUpperCase() === "AM" && h === 12) h = 0;
-  // ToD is venue wall-clock (BST = UTC+1 for our 2025 event).
-  const d = new Date(Date.UTC(
-    RACE_START.getUTCFullYear(),
-    RACE_START.getUTCMonth(),
-    RACE_START.getUTCDate(),
-    h - 1, mi, s,
-  ));
-  if (d.getTime() < RACE_START.getTime()) d.setUTCDate(d.getUTCDate() + 1);
-  return d.toISOString();
-}
-
 // ---- file cache ------------------------------------------------------------
 
 const cache = new Map<string, Promise<Record<string, string>[]>>();
@@ -90,6 +70,98 @@ function loadCsv(name: string): Promise<Record<string, string>[]> {
   return p;
 }
 
+// ---- snapshot at SIM_RACE_ELAPSED_SEC --------------------------------------
+
+type Snapshot = {
+  laps: number;
+  totalSec: number;
+  lapEndAt: string | null;
+};
+
+let snapshotsPromise: Promise<Map<number, Snapshot>> | null = null;
+
+// Aggregate lap_details into per-bib state AT the simulated cutoff. Laps
+// completed after the cutoff are dropped; pit + lap durations accumulate
+// strictly until the next would push us past it.
+function buildSnapshots(): Promise<Map<number, Snapshot>> {
+  if (snapshotsPromise) return snapshotsPromise;
+  snapshotsPromise = (async () => {
+    const cutoff = SIM_RACE_ELAPSED_SEC;
+    const [ind, team] = await Promise.all([
+      loadCsv("lap_details_individual.csv"),
+      loadCsv("lap_details_team.csv"),
+    ]);
+    const byBib = new Map<number, Record<string, string>[]>();
+    for (const r of [...ind, ...team]) {
+      const bib = toInt(r.Bib);
+      if (!bib) continue;
+      if (!byBib.has(bib)) byBib.set(bib, []);
+      byBib.get(bib)!.push(r);
+    }
+    const out = new Map<number, Snapshot>();
+    for (const [bib, laps] of byBib) {
+      laps.sort((a, b) => toInt(a.LapNum) - toInt(b.LapNum));
+      let elapsedSec = 0;
+      let lapsDone = 0;
+      let lastEndedAt: string | null = null;
+      for (const lap of laps) {
+        const n = toInt(lap.LapNum);
+        if (!n) continue;
+        const pitSec = n === 1 ? 0 : (parseHmsToSec(lap.PitTime) ?? 0);
+        const lapSec = parseHmsToSec(lap.LapTime) ?? 0;
+        const newElapsed = elapsedSec + pitSec + lapSec;
+        if (cutoff != null && newElapsed > cutoff) break;
+        elapsedSec = newElapsed;
+        lapsDone = n;
+        lastEndedAt = new Date(RACE_START.getTime() + elapsedSec * 1000).toISOString();
+      }
+      out.set(bib, { laps: lapsDone, totalSec: elapsedSec, lapEndAt: lastEndedAt });
+    }
+    return out;
+  })();
+  return snapshotsPromise;
+}
+
+function applySnapshot(a: Athlete, snap: Snapshot | undefined): Athlete {
+  if (!snap) {
+    return {
+      ...a,
+      laps: 0,
+      totalSec: null,
+      distanceMiles: 0,
+      lastSeenLabel: "",
+      lastSeenAt: null,
+    };
+  }
+  return {
+    ...a,
+    laps: snap.laps,
+    totalSec: snap.totalSec > 0 ? snap.totalSec : null,
+    distanceMiles: snap.laps * LAP_MILES,
+    lastSeenLabel: snap.laps > 0 ? `Lap ${snap.laps} Finish` : "",
+    lastSeenAt: snap.lapEndAt,
+  };
+}
+
+// Sort by (laps desc, totalSec asc) and assign ranks. genderRank is computed
+// per-gender within the slice; for ungendered rows (teams, team members) it
+// follows the overall position.
+function reRank(athletes: Athlete[]): Athlete[] {
+  const sorted = [...athletes].sort((a, b) => {
+    if (a.laps !== b.laps) return b.laps - a.laps;
+    return (a.totalSec ?? Infinity) - (b.totalSec ?? Infinity);
+  });
+  let mRank = 0;
+  let fRank = 0;
+  return sorted.map((a, i) => {
+    let genderRank: number;
+    if (a.gender === "M") genderRank = ++mRank;
+    else if (a.gender === "F") genderRank = ++fRank;
+    else genderRank = i + 1;
+    return { ...a, overallRank: i + 1, genderRank };
+  });
+}
+
 // ---- row → Athlete ---------------------------------------------------------
 
 function toInt(s: string | undefined, fallback = 0): number {
@@ -99,7 +171,6 @@ function toInt(s: string | undefined, fallback = 0): number {
 }
 
 function indRowToAthlete(r: Record<string, string>, gender: "M" | "F"): Athlete {
-  const rank = toInt(r.Rank);
   const agRank = r.AgeGroupRank && r.AgeGroupRank !== "-" ? toInt(r.AgeGroupRank) : null;
   return {
     bib: toInt(r.Bib),
@@ -107,15 +178,15 @@ function indRowToAthlete(r: Record<string, string>, gender: "M" | "F"): Athlete 
     category: "Individual",
     nation: r.Country ?? "",
     gender,
-    overallRank: rank,
-    genderRank: rank,
+    overallRank: 0,
+    genderRank: 0,
     ageGroupRank: agRank,
-    distanceMiles: toInt(r.TotalDistanceMi),
-    laps: toInt(r.LapsCompleted),
+    distanceMiles: 0,
+    laps: 0,
     lastLapSec: null,
-    totalSec: parseHmsToSec(r.TotalTime),
-    lastSeenLabel: r.PointLastSeen ?? "",
-    lastSeenAt: parseTodToISO(r.TimeOfDay),
+    totalSec: null,
+    lastSeenLabel: "",
+    lastSeenAt: null,
   };
 }
 
@@ -126,15 +197,15 @@ function memberRowToAthlete(r: Record<string, string>): Athlete {
     category: "TeamMember",
     nation: "",
     gender: null,
-    overallRank: toInt(r.Rank),
+    overallRank: 0,
     genderRank: 0,
     ageGroupRank: null,
-    distanceMiles: toInt(r.TotalDistanceMi),
-    laps: toInt(r.LapsCompleted),
+    distanceMiles: 0,
+    laps: 0,
     lastLapSec: null,
-    totalSec: parseHmsToSec(r.TotalTime),
-    lastSeenLabel: r.PointLastSeen ?? "",
-    lastSeenAt: parseTodToISO(r.TimeOfDay),
+    totalSec: null,
+    lastSeenLabel: "",
+    lastSeenAt: null,
   };
 }
 
@@ -145,55 +216,58 @@ function teamRowToAthlete(r: Record<string, string>): Athlete {
     category: "Team",
     nation: "",
     gender: null,
-    overallRank: toInt(r.Rank),
-    genderRank: toInt(r.Rank),
+    overallRank: 0,
+    genderRank: 0,
     ageGroupRank: null,
-    distanceMiles: toInt(r.TotalDistanceMi),
-    laps: toInt(r.LapsCompleted),
+    distanceMiles: 0,
+    laps: 0,
     lastLapSec: null,
-    totalSec: parseHmsToSec(r.TotalTime),
-    lastSeenLabel: r.PointLastSeen ?? "",
-    lastSeenAt: parseTodToISO(r.TimeOfDay),
+    totalSec: null,
+    lastSeenLabel: "",
+    lastSeenAt: null,
   };
 }
 
 // ---- public API ------------------------------------------------------------
 
 export async function getAthletesBySlice(slice: Slice): Promise<Athlete[]> {
+  const snapshots = await buildSnapshots();
+
+  let raw: Athlete[];
   if (slice === "women") {
     const rows = await loadCsv("individual_Female.csv");
-    return rows.map((r) => indRowToAthlete(r, "F"));
-  }
-  if (slice === "men") {
+    raw = rows.map((r) => indRowToAthlete(r, "F"));
+  } else if (slice === "men") {
     const rows = await loadCsv("individual_Male.csv");
-    return rows.map((r) => indRowToAthlete(r, "M"));
-  }
-  if (slice === "teams") {
+    raw = rows.map((r) => indRowToAthlete(r, "M"));
+  } else if (slice === "teams") {
     const rows = await loadCsv("teams.csv");
-    return rows.map(teamRowToAthlete);
+    raw = rows.map(teamRowToAthlete);
+  } else {
+    // overall = women + men + team members (no team chips)
+    const [f, m, tm] = await Promise.all([
+      loadCsv("individual_Female.csv"),
+      loadCsv("individual_Male.csv"),
+      loadCsv("team_members.csv"),
+    ]);
+    raw = [
+      ...f.map((r) => indRowToAthlete(r, "F")),
+      ...m.map((r) => indRowToAthlete(r, "M")),
+      ...tm.map(memberRowToAthlete),
+    ];
   }
-  // overall = women + men + team members (no team chips)
-  const [f, m, tm] = await Promise.all([
-    loadCsv("individual_Female.csv"),
-    loadCsv("individual_Male.csv"),
-    loadCsv("team_members.csv"),
-  ]);
-  return [
-    ...f.map((r) => indRowToAthlete(r, "F")),
-    ...m.map((r) => indRowToAthlete(r, "M")),
-    ...tm.map(memberRowToAthlete),
-  ].sort((a, b) => {
-    // Sort by laps desc then totalSec asc, matching event ranking.
-    if (a.laps !== b.laps) return b.laps - a.laps;
-    return (a.totalSec ?? Infinity) - (b.totalSec ?? Infinity);
-  }).map((a, i) => ({ ...a, overallRank: i + 1 }));
+
+  const withState = raw.map((a) => applySnapshot(a, snapshots.get(a.bib)));
+  return reRank(withState);
 }
 
 // Build real per-lap passings by accumulating PitTime + LapTime offsets
 // from RACE_START. Sourced from lap_details_individual.csv (solo + team members)
 // and lap_details_team.csv (team chips). The team-chip rows share BIB-space
 // (5-digit team bibs vs 4-digit athlete bibs) so a single merged list is safe.
+// Laps that complete after SIM_RACE_ELAPSED_SEC are dropped.
 export async function getAllPassings(): Promise<Passing[]> {
+  const cutoff = SIM_RACE_ELAPSED_SEC;
   const [ind, team] = await Promise.all([
     loadCsv("lap_details_individual.csv"),
     loadCsv("lap_details_team.csv"),
@@ -219,7 +293,9 @@ export async function getAllPassings(): Promise<Passing[]> {
       // Lap 1's PitTime is a literal " - " — treat as no prior pit.
       const pitSec = lapNumber === 1 ? 0 : (parseHmsToSec(lap.PitTime) ?? 0);
       const lapSec = parseHmsToSec(lap.LapTime) ?? 0;
-      elapsedSec += pitSec + lapSec;
+      const newElapsed = elapsedSec + pitSec + lapSec;
+      if (cutoff != null && newElapsed > cutoff) break;
+      elapsedSec = newElapsed;
       passings.push({
         bib,
         lapNumber,
