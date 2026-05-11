@@ -21,6 +21,10 @@ export type Lap = {
   lapNumber: number;
   lapStartedAt: string | null;
   lapCompletedAt: string | null;
+  // The pit FOLLOWING this lap (i.e. "pit N" sits on lap N's row). Pit 1
+  // is the rest between lap 1 and lap 2, owned by lap 1. The final
+  // completed lap typically has these as null until the next lap is
+  // confirmed by the feed.
   pitStartedAt: string | null;
   pitCompletedAt: string | null;
   source: "api" | "manual";

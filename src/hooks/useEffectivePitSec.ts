@@ -48,28 +48,28 @@ export function useEffectivePitSec(bib: number): EffectivePitSec {
 
   let autoSec: number | null = null;
   if (completed.length > 0) {
+    // Run-only seconds per lap: use this lap's own start→end window.
+    // (lap.pitStartedAt / pitCompletedAt now describe the pit AFTER this
+    // lap, so they're not the right subtraction for this lap's run.)
     const lapRunSecs: number[] = [];
-    let prevEndMs = RACE_START.getTime();
+    let lastEndMs = RACE_START.getTime();
     for (const l of completed) {
       const endMs = new Date(l.lapCompletedAt).getTime();
-      const wallClockSec = (endMs - prevEndMs) / 1000;
-      let pitSec = 0;
-      if (l.pitStartedAt && l.pitCompletedAt) {
-        pitSec =
-          (new Date(l.pitCompletedAt).getTime() -
-            new Date(l.pitStartedAt).getTime()) /
-          1000;
+      if (l.lapStartedAt) {
+        const startMs = new Date(l.lapStartedAt).getTime();
+        lapRunSecs.push(Math.max(0, (endMs - startMs) / 1000));
       }
-      lapRunSecs.push(Math.max(0, wallClockSec - pitSec));
-      prevEndMs = endMs;
+      lastEndMs = endMs;
     }
-    const totalSec = (prevEndMs - RACE_START.getTime()) / 1000;
-    autoSec = recommendPitSec({
-      goalMiles: followed.goalMiles,
-      laps: completed.length,
-      totalSec,
-      lapRunSecs,
-    });
+    const totalSec = (lastEndMs - RACE_START.getTime()) / 1000;
+    if (lapRunSecs.length > 0) {
+      autoSec = recommendPitSec({
+        goalMiles: followed.goalMiles,
+        laps: completed.length,
+        totalSec,
+        lapRunSecs,
+      });
+    }
   }
 
   // User override wins for the effective value, but autoSec is always

@@ -84,57 +84,27 @@ export function PaceChart({
     const lapEndY = n * LAP_MILES;
     const prevY = (n - 1) * LAP_MILES;
 
-    // Trailing pace at the END of pit (before lap N starts) sees only laps
-    // strictly before this one; at the END of lap N it includes this lap.
     const priorDurs = lapDurations.slice();
     const thisLapDur = lapEndSec - prevEndSecForDur;
     const throughThis = [...priorDurs, thisLapDur];
 
-    // Color every segment. Early laps look fast because obstacles aren't
-    // open yet for the first ~6h; the fade table (calibrated from the
-    // finisher cohort) already weights those transitions, so an early-race
-    // lap-2 pace that *looks* on track for 20 laps gets correctly bumped
-    // toward red once obstacles factor in.
+    // Status at the lap's completion (laps-completed = n). The pit that
+    // follows this lap shares the same paceStatus: the athlete has the
+    // same number of laps under their belt while in the pit afterward.
     const statusAtLapEnd = paceStatus({
       totalSec: lapEndSec,
       laps: n,
       goalMiles,
       lapSecs: throughThis,
     });
-    const statusAtPitEnd =
-      n > 1
-        ? paceStatus({
-            totalSec: lapEndSec,
-            laps: n - 1,
-            goalMiles,
-            lapSecs: priorDurs,
-          })
-        : null;
 
-    const hasPit = lap.pitStartedAt && lap.pitCompletedAt;
     const hasLapStart = !!lap.lapStartedAt;
+    // Pit AFTER this lap — stored on lap N's row, drawn at y = lapEndY
+    // (horizontal at the lap's miles, since the pit consumes time without
+    // adding distance).
+    const hasPit = lap.pitStartedAt && lap.pitCompletedAt;
 
-    if (hasPit && hasLapStart) {
-      const pitStartSec = secFromStart(lap.pitStartedAt!);
-      const pitEndSec = secFromStart(lap.pitCompletedAt!);
-      const lapStartSec = secFromStart(lap.lapStartedAt!);
-      segments.push({
-        kind: "pit",
-        x1: pitStartSec,
-        y1: prevY,
-        x2: pitEndSec,
-        y2: prevY,
-        status: statusAtPitEnd,
-      });
-      segments.push({
-        kind: "lap",
-        x1: lapStartSec,
-        y1: prevY,
-        x2: lapEndSec,
-        y2: lapEndY,
-        status: statusAtLapEnd,
-      });
-    } else if (hasLapStart) {
+    if (hasLapStart) {
       segments.push({
         kind: "lap",
         x1: secFromStart(lap.lapStartedAt!),
@@ -144,13 +114,26 @@ export function PaceChart({
         status: statusAtLapEnd,
       });
     } else {
-      // No segment-level breakdown — fall back to one combined line from
+      // No per-lap start time — fall back to one combined line from
       // the prior lap end (or origin).
       segments.push({
         kind: "lap",
         x1: lastLapEndSec,
         y1: lastLapEndMiles,
         x2: lapEndSec,
+        y2: lapEndY,
+        status: statusAtLapEnd,
+      });
+    }
+
+    if (hasPit) {
+      const pitStartSec = secFromStart(lap.pitStartedAt!);
+      const pitEndSec = secFromStart(lap.pitCompletedAt!);
+      segments.push({
+        kind: "pit",
+        x1: pitStartSec,
+        y1: lapEndY,
+        x2: pitEndSec,
         y2: lapEndY,
         status: statusAtLapEnd,
       });

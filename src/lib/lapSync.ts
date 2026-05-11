@@ -32,9 +32,13 @@ export async function syncBibLaps(row: Athlete): Promise<void> {
 }
 
 // Full per-lap history from the passings feed. Unlike syncBibLaps which only
-// stamps the latest lap, this stamps every lap that has a passing — fixing
-// cold-load gaps for older laps. When the passing carries pitSec/lapSec, we
-// also stamp the pit + lap windows so StatsGrid / LapStrip can show pit times.
+// stamps the latest lap, this stamps every lap that has a passing.
+//
+// Storage convention (changed in this revision): the pit FOLLOWING a lap
+// is stored on that lap's row. So "pit 1" — the rest between lap 1 and lap
+// 2 — lives on lap 1's record. The Passing for lap K carries the pit
+// duration BEFORE lap K (the wire-format from RaceResult); we shift that
+// pit onto lap K-1's row at sync time.
 export async function syncBibLapsFromPassings(
   bib: number,
   passings: Passing[],
@@ -45,37 +49,50 @@ export async function syncBibLapsFromPassings(
   // the API returns SOME laps but fewer than we have locally.
   if (passings.length === 0) return;
 
+  const sorted = [...passings].sort((a, b) => a.lapNumber - b.lapNumber);
+
   // Read everything we currently have for this bib once, then compute
   // both the writes (rows whose timestamps changed) and the deletes
   // (api-sourced rows the new passings no longer include) in memory, and
   // flush both in a single rw transaction.
   const existing = await db.laps.where("bib").equals(bib).toArray();
   const existingById = new Map(existing.map((r) => [r.id, r]));
-  const validIds = new Set(passings.map((p) => lapId(bib, p.lapNumber)));
+  const validIds = new Set(sorted.map((p) => lapId(bib, p.lapNumber)));
 
   const writes: Lap[] = [];
-  for (const p of passings) {
+  for (let i = 0; i < sorted.length; i++) {
+    const p = sorted[i];
+    const next = sorted[i + 1]; // for the pit AFTER this lap
     const id = lapId(bib, p.lapNumber);
     const prior = existingById.get(id);
 
-    // Compute window timestamps from durations when we have them.
-    // For lap N: completedAt is the end; lapStartedAt = completedAt - lapSec;
-    // pitCompletedAt = lapStartedAt; pitStartedAt = pitCompletedAt - pitSec.
+    // Lap window: end is p.completedAt; start = end - lapSec.
     let lapStartedAt = prior?.lapStartedAt ?? null;
-    let pitStartedAt = prior?.pitStartedAt ?? null;
-    let pitCompletedAt = prior?.pitCompletedAt ?? null;
     if (p.lapSec != null) {
       const endMs = new Date(p.completedAt).getTime();
-      const lapStartMs = endMs - p.lapSec * 1000;
-      lapStartedAt = new Date(lapStartMs).toISOString();
-      if (p.pitSec != null && p.pitSec > 0) {
-        pitCompletedAt = lapStartedAt;
-        pitStartedAt = new Date(lapStartMs - p.pitSec * 1000).toISOString();
-      } else if (p.pitSec === 0) {
-        // Explicit "no pit before this lap" (e.g. lap 1). Clear stale data.
+      lapStartedAt = new Date(endMs - p.lapSec * 1000).toISOString();
+    }
+
+    // Pit window: the pit AFTER this lap. Its DURATION comes from the
+    // *next* passing's pitSec (the API reports each pit as "before lap
+    // K+1"); we anchor pitStartedAt to this lap's completedAt and add
+    // that duration to get pitCompletedAt.
+    let pitStartedAt = prior?.pitStartedAt ?? null;
+    let pitCompletedAt = prior?.pitCompletedAt ?? null;
+    if (next) {
+      if (next.pitSec != null && next.pitSec > 0) {
+        pitStartedAt = p.completedAt;
+        const pitEndMs = new Date(p.completedAt).getTime() + next.pitSec * 1000;
+        pitCompletedAt = new Date(pitEndMs).toISOString();
+      } else if (next.pitSec === 0) {
         pitStartedAt = null;
         pitCompletedAt = null;
       }
+    } else {
+      // Last known lap — no pit AFTER yet (athlete is mid-pit or still
+      // out). Clear any stale pit values we previously wrote here.
+      pitStartedAt = null;
+      pitCompletedAt = null;
     }
 
     if (
