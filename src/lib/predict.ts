@@ -5,6 +5,7 @@ export type Prediction = {
   remainingLaps: number;
   avgLapSec: number;
   predictedFinish: Date;
+  marginMs: number;
   withinRaceWindow: boolean;
 };
 
@@ -23,6 +24,7 @@ export function predict(opts: {
     remainingLaps: remaining,
     avgLapSec: avg,
     predictedFinish: new Date(finishMs),
+    marginMs: RACE_END.getTime() - finishMs,
     withinRaceWindow: finishMs <= RACE_END.getTime(),
   };
 }
