@@ -6,6 +6,8 @@ export type FollowedAthlete = {
   gender: "M" | "F" | null;
   team: string | null;
   goalMiles: number | null;
+  // Target per-pit duration in seconds. Undefined / null = no goal set.
+  goalPitSec?: number | null;
   addedAt: string;
   // Optional per-athlete intake targets. Undefined → fall back to INTAKE_DEFAULTS.
   targetCalPerHr?: number | null;

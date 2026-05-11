@@ -72,7 +72,11 @@ export default function AthleteDetailPage({
 
       <Countdowns />
 
-      <GoalMilesEditor bib={bib} goalMiles={followed.goalMiles} />
+      <GoalMilesEditor
+        bib={bib}
+        goalMiles={followed.goalMiles}
+        goalPitSec={followed.goalPitSec ?? null}
+      />
 
       <FinishPrediction
         totalSec={row?.totalSec ?? 0}

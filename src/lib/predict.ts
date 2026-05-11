@@ -28,3 +28,27 @@ export function predict(opts: {
     withinRaceWindow: finishMs <= RACE_END.getTime(),
   };
 }
+
+export type PaceStatus = "green" | "amber" | "red";
+
+// Comfortable buffer over the race-end cutoff. Tight finishes flip amber.
+export const PACE_BUFFER_MS = 30 * 60 * 1000;
+
+// Classify a (totalSec, laps) snapshot relative to the goal: would the
+// athlete hit goal-miles before race end, and with how much margin?
+//   green: on pace with >= 30min margin (or already at goal)
+//   amber: on pace but margin < 30min
+//   red:   projected to miss race-end
+// Returns null when we can't predict (no goal, no laps, no time).
+export function paceStatus(opts: {
+  totalSec: number;
+  laps: number;
+  goalMiles: number | null;
+}): PaceStatus | null {
+  const p = predict(opts);
+  if (!p) return null;
+  if (p.remainingLaps <= 0) return "green"; // already at/past goal
+  if (p.marginMs < 0) return "red";
+  if (p.marginMs < PACE_BUFFER_MS) return "amber";
+  return "green";
+}

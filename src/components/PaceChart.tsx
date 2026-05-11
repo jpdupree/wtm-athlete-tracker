@@ -1,16 +1,32 @@
 "use client";
 
 import { useLiveQuery } from "dexie-react-hooks";
-import { db } from "@/lib/db";
+import { db, type Lap } from "@/lib/db";
 import { useNow } from "@/hooks/useNow";
 import { LAP_MILES, LAST_LAP_START_CUTOFF, RACE_END, RACE_START } from "@/lib/race";
+import { paceStatus, type PaceStatus } from "@/lib/predict";
 
 const W = 320;
 const H = 220;
 const PAD_L = 30;
 const PAD_R = 8;
 const PAD_T = 10;
-const PAD_B = 22;
+const PAD_B = 30;
+
+const STATUS_STROKE: Record<PaceStatus, string> = {
+  green: "#16a34a",
+  amber: "#d97706",
+  red: "#dc2626",
+};
+
+type Segment = {
+  kind: "pit" | "lap";
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  status: PaceStatus | null;
+};
 
 export function PaceChart({
   bib,
@@ -43,45 +59,96 @@ export function PaceChart({
   const windowSec = (raceEndMs - raceStartMs) / 1000;
   const cutoffSec = (cutoffMs - raceStartMs) / 1000;
 
-  const points: Array<{ x: number; y: number }> = [{ x: 0, y: 0 }];
-  for (const lap of lapRows ?? []) {
-    if (!lap.lapCompletedAt) continue;
-    const x = (new Date(lap.lapCompletedAt).getTime() - raceStartMs) / 1000;
-    if (Number.isNaN(x) || x < 0 || x > windowSec) continue;
-    points.push({ x, y: lap.lapNumber * LAP_MILES });
-  }
-  points.sort((a, b) => a.x - b.x);
-  const last = points[points.length - 1];
+  const secFromStart = (iso: string): number =>
+    (new Date(iso).getTime() - raceStartMs) / 1000;
 
+  // ---- Build segments (pit + lap) per lap row.
+  const segments: Segment[] = [];
+  const lapMarkers: Array<{ x: number; y: number }> = [];
+
+  const validLaps = (lapRows ?? []).filter((l): l is Lap => !!l.lapCompletedAt);
+  let lastLapEndSec = 0;
+  let lastLapEndMiles = 0;
+  for (const lap of validLaps) {
+    const n = lap.lapNumber;
+    const lapEndSec = secFromStart(lap.lapCompletedAt!);
+    if (!Number.isFinite(lapEndSec) || lapEndSec < 0 || lapEndSec > windowSec) continue;
+
+    const lapEndY = n * LAP_MILES;
+    const prevY = (n - 1) * LAP_MILES;
+
+    const hasPit = lap.pitStartedAt && lap.pitCompletedAt;
+    const hasLapStart = !!lap.lapStartedAt;
+
+    if (hasPit && hasLapStart) {
+      const pitStartSec = secFromStart(lap.pitStartedAt!);
+      const pitEndSec = secFromStart(lap.pitCompletedAt!);
+      const lapStartSec = secFromStart(lap.lapStartedAt!);
+      // Pit segment (horizontal — no miles gained).
+      segments.push({
+        kind: "pit",
+        x1: pitStartSec,
+        y1: prevY,
+        x2: pitEndSec,
+        y2: prevY,
+        status: n > 1 ? paceStatus({ totalSec: pitEndSec, laps: n - 1, goalMiles }) : null,
+      });
+      // Lap segment (diagonal).
+      segments.push({
+        kind: "lap",
+        x1: lapStartSec,
+        y1: prevY,
+        x2: lapEndSec,
+        y2: lapEndY,
+        status: paceStatus({ totalSec: lapEndSec, laps: n, goalMiles }),
+      });
+    } else if (hasLapStart) {
+      segments.push({
+        kind: "lap",
+        x1: secFromStart(lap.lapStartedAt!),
+        y1: prevY,
+        x2: lapEndSec,
+        y2: lapEndY,
+        status: paceStatus({ totalSec: lapEndSec, laps: n, goalMiles }),
+      });
+    } else {
+      // No segment-level breakdown — fall back to one combined line from
+      // the prior lap end (or origin).
+      segments.push({
+        kind: "lap",
+        x1: lastLapEndSec,
+        y1: lastLapEndMiles,
+        x2: lapEndSec,
+        y2: lapEndY,
+        status: paceStatus({ totalSec: lapEndSec, laps: n, goalMiles }),
+      });
+    }
+
+    lapMarkers.push({ x: lapEndSec, y: lapEndY });
+    lastLapEndSec = lapEndSec;
+    lastLapEndMiles = lapEndY;
+  }
+
+  // Projection from the last actual point at current avg pace.
+  const lastY = lastLapEndMiles;
+  const lastX = lastLapEndSec;
   const avgLapSec = laps > 0 && totalSec > 0 ? totalSec / laps : null;
 
   let projectionEnd: { x: number; y: number } | null = null;
-  if (avgLapSec && last.y < goalMiles) {
+  if (avgLapSec && lastY < goalMiles) {
     const slope = LAP_MILES / avgLapSec;
-    const xToGoal = last.x + (goalMiles - last.y) / slope;
+    const xToGoal = lastX + (goalMiles - lastY) / slope;
     projectionEnd =
       xToGoal <= windowSec
         ? { x: xToGoal, y: goalMiles }
-        : { x: windowSec, y: last.y + (windowSec - last.x) * slope };
+        : { x: windowSec, y: lastY + (windowSec - lastX) * slope };
   }
 
-  const yMax = Math.max(goalMiles, projectionEnd?.y ?? 0, last.y) * 1.08;
+  const yMax = Math.max(goalMiles, projectionEnd?.y ?? 0, lastY) * 1.08;
 
   const sx = (x: number) => PAD_L + (x / windowSec) * (W - PAD_L - PAD_R);
   const sy = (y: number) => H - PAD_B - (y / yMax) * (H - PAD_T - PAD_B);
 
-  const actualPath = points
-    .map((p, i) => `${i === 0 ? "M" : "L"} ${sx(p.x).toFixed(1)} ${sy(p.y).toFixed(1)}`)
-    .join(" ");
-
-  const projPath = projectionEnd
-    ? `M ${sx(last.x).toFixed(1)} ${sy(last.y).toFixed(1)} L ${sx(projectionEnd.x).toFixed(1)} ${sy(projectionEnd.y).toFixed(1)}`
-    : null;
-
-  // Required-pace diagonals from origin.
-  //  - end-pace:    (0,0) → (raceEnd, goalMiles)
-  //  - cutoff-pace: (0,0) → (cutoff,  goalMiles - LAP_MILES)
-  //    (start the goal-completing lap by cutoff to have 1.5h to finish it)
   const cutoffPaceY = Math.max(0, goalMiles - LAP_MILES);
 
   const nowSec = Math.min(windowSec, Math.max(0, (now - raceStartMs) / 1000));
@@ -237,45 +304,82 @@ export function PaceChart({
           />
         )}
 
-        {/* Actual series */}
-        <path d={actualPath} fill="none" stroke="currentColor" strokeWidth="2" />
-        {points.map((p, i) =>
-          i === 0 ? null : (
-            <circle
+        {/* Actual series — one <line> per pit/lap segment, colored by paceStatus at segment end. */}
+        {segments.map((seg, i) => {
+          const stroke = seg.status ? STATUS_STROKE[seg.status] : "currentColor";
+          return (
+            <line
               key={i}
-              cx={sx(p.x)}
-              cy={sy(p.y)}
-              r="2"
-              fill="currentColor"
+              x1={sx(seg.x1)}
+              y1={sy(seg.y1)}
+              x2={sx(seg.x2)}
+              y2={sy(seg.y2)}
+              stroke={stroke}
+              strokeWidth={seg.kind === "lap" ? 2.2 : 1.6}
+              strokeLinecap="round"
+              strokeDasharray={seg.kind === "pit" ? "3 2" : undefined}
+              opacity={seg.status ? 1 : 0.7}
             />
-          ),
-        )}
+          );
+        })}
+        {lapMarkers.map((p, i) => (
+          <circle
+            key={`m${i}`}
+            cx={sx(p.x)}
+            cy={sy(p.y)}
+            r="2"
+            fill="currentColor"
+          />
+        ))}
 
         {/* Projection */}
-        {projPath && (
-          <path
-            d={projPath}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeDasharray="4 3"
-            opacity="0.55"
-          />
-        )}
         {projectionEnd && (
-          <circle
-            cx={sx(projectionEnd.x)}
-            cy={sy(projectionEnd.y)}
-            r="2.5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-          />
+          <>
+            <line
+              x1={sx(lastX)}
+              y1={sy(lastY)}
+              x2={sx(projectionEnd.x)}
+              y2={sy(projectionEnd.y)}
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeDasharray="4 3"
+              opacity="0.55"
+            />
+            <circle
+              cx={sx(projectionEnd.x)}
+              cy={sy(projectionEnd.y)}
+              r="2.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            />
+          </>
         )}
+
+        {/* Legend */}
+        <g transform={`translate(${PAD_L}, ${H - 6})`}>
+          <line x1="0" y1="0" x2="14" y2="0" stroke={STATUS_STROKE.green} strokeWidth="2" />
+          <text x="18" y="3" fontSize="8" fill="currentColor" opacity="0.7">on pace</text>
+          <line x1="58" y1="0" x2="72" y2="0" stroke={STATUS_STROKE.amber} strokeWidth="2" />
+          <text x="76" y="3" fontSize="8" fill="currentColor" opacity="0.7">tight</text>
+          <line x1="104" y1="0" x2="118" y2="0" stroke={STATUS_STROKE.red} strokeWidth="2" />
+          <text x="122" y="3" fontSize="8" fill="currentColor" opacity="0.7">behind</text>
+          <line
+            x1="158"
+            y1="0"
+            x2="172"
+            y2="0"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeDasharray="3 2"
+            opacity="0.7"
+          />
+          <text x="176" y="3" fontSize="8" fill="currentColor" opacity="0.7">pit</text>
+        </g>
       </svg>
       <p className="px-2 pt-1 text-[11px] opacity-60 leading-snug">
-        Solid: laps logged. Dashed: projection at current pace.
-        Thin diagonals: required pace to hit goal by cutoff / race end.
+        Solid segments: laps. Dashed segments: pit stops. Color reflects
+        whether the projected finish is hitting the goal at that point.
       </p>
     </div>
   );
