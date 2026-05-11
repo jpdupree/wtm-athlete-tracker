@@ -1,10 +1,23 @@
-// Minimal service worker for WTM Tracker.
-// - Pre-caches the app shell on install
-// - Network-first for /api/* (so live data wins online; cache rescues offline)
-// - Cache-first for everything else (HTML, JS, CSS, icons)
+// Service worker for WTM Tracker.
+//   - Pre-caches the app shell on install (top-level routes + brand assets)
+//   - Network-first for /api/* (live data wins online, cache rescues offline)
+//     and only caches 2xx responses so we don't lock in errors/redirects
+//   - Cache-first for everything else (HTML, JS, CSS, icons, logos)
+//
+// Bump CACHE when the SHELL list or the caching strategy changes — the
+// activate handler deletes any older caches so the new shell wins.
 
-const CACHE = "wtm-v1";
-const SHELL = ["/", "/add", "/map", "/manifest.webmanifest", "/icon.svg"];
+const CACHE = "wtm-v2";
+const SHELL = [
+  "/",
+  "/add",
+  "/map",
+  "/pace",
+  "/manifest.webmanifest",
+  "/icon.svg",
+  "/logo-light.png",
+  "/logo-dark.png",
+];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
@@ -29,8 +42,12 @@ self.addEventListener("fetch", (e) => {
     e.respondWith(
       fetch(e.request)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(e.request, copy));
+          // Only cache real successes so a transient 5xx doesn't poison
+          // the offline fallback for the next 15s+ of polling.
+          if (res.ok && res.status === 200) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(e.request, copy));
+          }
           return res;
         })
         .catch(() =>
