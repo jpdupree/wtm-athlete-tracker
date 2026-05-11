@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useFeed } from "@/hooks/useFeed";
 import { fmtAge, fmtSec } from "@/lib/format";
+import { FollowButton } from "@/components/FollowButton";
+import { ManualAddForm } from "@/components/ManualAddForm";
 
 export default function AddAthletePage() {
   const { data, error, loading } = useFeed("overall");
@@ -18,6 +20,8 @@ export default function AddAthletePage() {
       isNumeric ? String(r.bib).startsWith(term) : r.name.toLowerCase().includes(term),
     );
   }, [data, q]);
+
+  const showManual = data && q.trim() !== "" && rows.length === 0;
 
   return (
     <main className="mx-auto max-w-md px-4 py-6 space-y-4">
@@ -51,7 +55,7 @@ export default function AddAthletePage() {
       )}
 
       <ul className="divide-y divide-current/10">
-        {rows.map((r) => (
+        {rows.slice(0, 100).map((r) => (
           <li key={r.bib} className="flex items-center justify-between py-2">
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">{r.name}</p>
@@ -60,21 +64,23 @@ export default function AddAthletePage() {
                 {r.laps > 0 && ` · ${r.laps} laps · last ${fmtSec(r.lastLapSec)}`}
               </p>
             </div>
-            <button
-              disabled
-              className="ml-3 shrink-0 rounded-md border border-current/30 px-3 py-1 text-xs opacity-50"
-              title="Wired in week 3"
-            >
-              Follow
-            </button>
+            <FollowButton row={r} />
           </li>
         ))}
-        {data && rows.length === 0 && (
-          <li className="py-8 text-center text-sm opacity-60">
-            No matches. (Manual add lands week 3.)
-          </li>
-        )}
       </ul>
+
+      {data && rows.length > 100 && (
+        <p className="text-center text-xs opacity-50">
+          Showing first 100 of {rows.length}. Refine your search to see more.
+        </p>
+      )}
+
+      {showManual && (
+        <>
+          <p className="text-center text-sm opacity-60">No matches for &ldquo;{q}&rdquo;.</p>
+          <ManualAddForm initialName={/^\d+$/.test(q.trim()) ? "" : q.trim()} />
+        </>
+      )}
     </main>
   );
 }
