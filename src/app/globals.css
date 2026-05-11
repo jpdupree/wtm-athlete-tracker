@@ -1,0 +1,7 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light dark;
+}
+
+html, body { background: Canvas; color: CanvasText; }
