@@ -9,6 +9,7 @@ import { fmtAge, fmtSec } from "@/lib/format";
 import { Countdowns } from "@/components/Countdowns";
 import { GoalMilesEditor } from "@/components/GoalMilesEditor";
 import { FinishPrediction } from "@/components/FinishPrediction";
+import { PaceChart } from "@/components/PaceChart";
 import { LapCard } from "@/components/LapCard";
 
 export default function AthleteDetailPage({
@@ -76,6 +77,13 @@ export default function AthleteDetailPage({
       </section>
 
       <FinishPrediction
+        totalSec={row?.totalSec ?? 0}
+        laps={row?.laps ?? 0}
+        goalMiles={followed.goalMiles}
+      />
+
+      <PaceChart
+        bib={bib}
         totalSec={row?.totalSec ?? 0}
         laps={row?.laps ?? 0}
         goalMiles={followed.goalMiles}
