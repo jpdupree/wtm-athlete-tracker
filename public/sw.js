@@ -1,13 +1,19 @@
 // Service worker for WTM Tracker.
 //   - Pre-caches the app shell on install (top-level routes + brand assets)
-//   - Network-first for /api/* (live data wins online, cache rescues offline)
-//     and only caches 2xx responses so we don't lock in errors/redirects
-//   - Cache-first for everything else (HTML, JS, CSS, icons, logos)
+//   - Network-first for /api/* (live data wins online, cache rescues
+//     offline) and only caches 2xx responses so we don't lock in
+//     errors/redirects
+//   - Stale-while-revalidate for HTML pages and everything else: serve
+//     the cached response immediately for snappy loads, and refresh in
+//     the background so the NEXT visit gets the latest deploy. Avoids
+//     the previous trap where users were stuck on whatever HTML was in
+//     the cache until I manually bumped the version on every deploy.
 //
-// Bump CACHE when the SHELL list or the caching strategy changes — the
-// activate handler deletes any older caches so the new shell wins.
+// Bump CACHE when the SHELL list itself changes — the activate handler
+// deletes older caches so the new shell wins for clients that already
+// have an older version.
 
-const CACHE = "wtm-v5";
+const CACHE = "wtm-v6";
 
 // Offline fallback HTML for an athlete page that hasn't been warmed into
 // the cache. Self-contained — inlines its own styles so it doesn't depend
@@ -109,17 +115,24 @@ self.addEventListener("fetch", (e) => {
     return;
   }
 
+  // Stale-while-revalidate for shell pages, JS chunks, CSS, icons, etc.
+  // Serve the cached copy immediately if we have one (fast / works
+  // offline), but ALSO fire a network fetch in the background and
+  // replace the cache so the next visit sees the new content. This
+  // means a deploy with no SHELL changes propagates in one extra page
+  // load instead of requiring a manual CACHE bump.
   e.respondWith(
-    caches.match(e.request).then(
-      (cached) =>
-        cached ??
-        fetch(e.request).then((res) => {
+    caches.match(e.request).then((cached) => {
+      const networkPromise = fetch(e.request)
+        .then((res) => {
           if (res.ok) {
             const copy = res.clone();
             caches.open(CACHE).then((c) => c.put(e.request, copy));
           }
           return res;
-        }),
-    ),
+        })
+        .catch(() => cached);
+      return cached ?? networkPromise;
+    }),
   );
 });
