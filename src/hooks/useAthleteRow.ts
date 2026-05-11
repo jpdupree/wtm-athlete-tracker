@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { useFeed } from "./useFeed";
+import { useOverallFeed } from "@/components/FeedProvider";
 import type { Athlete } from "@/lib/types";
 
 export type UseAthleteRowResult = {
@@ -12,7 +12,7 @@ export type UseAthleteRowResult = {
 };
 
 export function useAthleteRow(bib: number): UseAthleteRowResult {
-  const { data, loading, error } = useFeed("overall");
+  const { data, loading, error } = useOverallFeed();
   const row = useMemo(() => {
     if (!data) return null;
     return data.rows.find((r) => r.bib === bib) ?? null;

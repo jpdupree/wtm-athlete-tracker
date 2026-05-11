@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, type FuelEntry, type Note } from "@/lib/db";
+import { lapId, markLapManual } from "@/lib/lapSync";
+import { fmtSec, fmtVenueClock } from "@/lib/format";
+import { RACE_START } from "@/lib/race";
 
 type Target = "lap" | "pit";
 
@@ -15,21 +18,72 @@ export function LapCard({
   lapNumber: number;
   inProgress: boolean;
 }) {
+  const lap = useLiveQuery(() => db.laps.get(lapId(bib, lapNumber)), [bib, lapNumber]);
+  const prevLap = useLiveQuery(
+    async () =>
+      lapNumber > 1 ? await db.laps.get(lapId(bib, lapNumber - 1)) : undefined,
+    [bib, lapNumber],
+  );
+
+  const completedAt = lap?.lapCompletedAt ?? null;
+  const prevEnd =
+    lapNumber === 1 ? RACE_START.toISOString() : prevLap?.lapCompletedAt ?? null;
+  const durationSec =
+    completedAt && prevEnd
+      ? Math.round((new Date(completedAt).getTime() - new Date(prevEnd).getTime()) / 1000)
+      : null;
+
+  const source = lap?.source;
+  const provisional = lap?.provisional;
+
   return (
     <details
       open={inProgress}
       className="rounded-lg border border-current/20 overflow-hidden"
     >
-      <summary className="flex items-center justify-between cursor-pointer px-4 py-3 select-none">
-        <span className="font-semibold">
-          Lap {lapNumber}
-          {inProgress && (
+      <summary className="flex items-center justify-between cursor-pointer px-4 py-3 select-none gap-2">
+        <span className="min-w-0">
+          <span className="font-semibold">Lap {lapNumber}</span>
+          {inProgress && !completedAt && (
             <span className="ml-2 text-xs font-normal opacity-60">in progress</span>
           )}
+          {completedAt && (
+            <span className="ml-2 text-xs opacity-70 tabular-nums">
+              {fmtVenueClock(completedAt)}
+              {durationSec != null && ` · ${fmtSec(durationSec)}`}
+            </span>
+          )}
         </span>
-        <Counts bib={bib} lapNumber={lapNumber} />
+        <span className="flex items-center gap-2 shrink-0">
+          {source === "manual" && provisional && (
+            <span className="rounded-full border border-amber-500/50 bg-amber-500/10 px-2 py-0.5 text-[10px] uppercase tracking-wide">
+              manual
+            </span>
+          )}
+          {source === "api" && (
+            <span className="rounded-full border border-green-500/50 bg-green-500/10 px-2 py-0.5 text-[10px] uppercase tracking-wide">
+              api
+            </span>
+          )}
+          <Counts bib={bib} lapNumber={lapNumber} />
+        </span>
       </summary>
+
       <div className="border-t border-current/10 divide-y divide-current/10">
+        {!completedAt && inProgress && (
+          <div className="px-4 py-3">
+            <button
+              onClick={() => markLapManual(bib, lapNumber)}
+              className="rounded-md border border-current/40 px-3 py-1 text-xs font-medium"
+            >
+              Mark lap {lapNumber} complete (now)
+            </button>
+            <p className="mt-1 text-[11px] opacity-60">
+              Tags as provisional. The next API poll upgrades it once confirmed.
+            </p>
+          </div>
+        )}
+
         <Section title={`Lap ${lapNumber} fuel`} bib={bib} lapNumber={lapNumber} target="lap" kind="fuel" />
         <Section title={`Lap ${lapNumber} notes`} bib={bib} lapNumber={lapNumber} target="lap" kind="note" />
         {!inProgress && (
@@ -52,12 +106,12 @@ function Counts({ bib, lapNumber }: { bib: number; lapNumber: number }) {
     () => db.notes.where("[bib+lapNumber]").equals([bib, lapNumber]).count(),
     [bib, lapNumber],
   );
-  if (!fuel && !notes) return <span className="text-xs opacity-50">—</span>;
+  if (!fuel && !notes) return <span className="text-xs opacity-40">—</span>;
   return (
     <span className="text-xs opacity-70 tabular-nums">
-      {fuel ? `${fuel} fuel` : ""}
+      {fuel ? `${fuel}f` : ""}
       {fuel && notes ? " · " : ""}
-      {notes ? `${notes} notes` : ""}
+      {notes ? `${notes}n` : ""}
     </span>
   );
 }
@@ -168,14 +222,10 @@ function AddFuel({ bib, lapNumber, target }: { bib: number; lapNumber: number; t
   const [kcal, setKcal] = useState("");
   const [sodium, setSodium] = useState("");
   const [fluid, setFluid] = useState("");
-  const [note, setNote] = useState("");
 
   if (!open) {
     return (
-      <button
-        onClick={() => setOpen(true)}
-        className="text-xs underline opacity-70"
-      >
+      <button onClick={() => setOpen(true)} className="text-xs underline opacity-70">
         + Log fuel
       </button>
     );
@@ -195,11 +245,11 @@ function AddFuel({ bib, lapNumber, target }: { bib: number; lapNumber: number; t
           sodiumMg: sodium.trim() ? parseInt(sodium, 10) : null,
           fluidMl: fluid.trim() ? parseInt(fluid, 10) : null,
           label: label.trim() || null,
-          note: note.trim() || null,
+          note: null,
           ts: new Date().toISOString(),
         };
         await db.fuel.add(entry);
-        setLabel(""); setKcal(""); setSodium(""); setFluid(""); setNote("");
+        setLabel(""); setKcal(""); setSodium(""); setFluid("");
         setOpen(false);
       }}
     >

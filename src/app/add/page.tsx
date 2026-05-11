@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { useFeed } from "@/hooks/useFeed";
+import { useOverallFeed } from "@/components/FeedProvider";
 import { fmtAge, fmtSec } from "@/lib/format";
 import { FollowButton } from "@/components/FollowButton";
 import { ManualAddForm } from "@/components/ManualAddForm";
 
 export default function AddAthletePage() {
-  const { data, error, loading } = useFeed("overall");
+  const { data, error, loading } = useOverallFeed();
   const [q, setQ] = useState("");
 
   const rows = useMemo(() => {
