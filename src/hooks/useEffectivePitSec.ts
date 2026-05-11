@@ -6,21 +6,27 @@ import { recommendPitSec } from "@/lib/predict";
 import { RACE_START } from "@/lib/race";
 
 export type EffectivePitSec = {
-  // Effective per-pit target: user override if set, otherwise the auto
-  // recommendation. null when no goal / no laps yet / race window closed.
+  // Effective per-pit target — user override if set, otherwise the latest
+  // auto recommendation. null when no goal / no laps yet / race window
+  // closed. Used by the Goal-section headline display.
   sec: number | null;
-  // The auto recommendation only, regardless of whether an override is set.
-  // Useful for places that should color against the *math*, not the user's
-  // personal goal — e.g. per-lap pit cards.
+  // The auto recommendation snapshot AT THE END OF THE LATEST LAP only.
+  // Useful for "what's my budget right now" style readouts.
   autoSec: number | null;
-  // Whether `sec` came from the user-set override or the auto recommendation.
+  // Per-lap rolling target. targets.get(N) is the per-pit budget that was
+  // in effect at the end of lap N — i.e. the budget the pit FOLLOWING lap
+  // N should be judged against. When the math goes non-positive (athlete
+  // already past the goal-pace point), we sticky-keep the last positive
+  // value so pits later in the race still get colored against a meaningful
+  // benchmark instead of all flipping red.
+  //
+  // Override mode (sec from goalPitSec) bypasses this map — see callers.
+  targets: Map<number, number>;
   source: "override" | "recommended" | null;
 };
 
-// Single source of truth for "what should a pit be?" — used by both the
-// goal section header (display) and the pit-color logic (LapStrip,
-// LapCard). Returns BOTH the effective value (override > auto) and the raw
-// auto recommendation so consumers can choose which one to color against.
+const EMPTY_TARGETS: Map<number, number> = new Map();
+
 export function useEffectivePitSec(bib: number): EffectivePitSec {
   const followed = useLiveQuery(() => db.followed.get(bib), [bib]);
   const laps = useLiveQuery(
@@ -28,41 +34,66 @@ export function useEffectivePitSec(bib: number): EffectivePitSec {
     [bib],
   );
 
-  if (!followed) return { sec: null, autoSec: null, source: null };
+  if (!followed) {
+    return { sec: null, autoSec: null, targets: EMPTY_TARGETS, source: null };
+  }
   if (followed.goalMiles == null || !laps) {
-    const override = followed.goalPitSec != null && followed.goalPitSec > 0
-      ? followed.goalPitSec
-      : null;
+    const override =
+      followed.goalPitSec != null && followed.goalPitSec > 0
+        ? followed.goalPitSec
+        : null;
     return {
       sec: override,
       autoSec: null,
+      targets: EMPTY_TARGETS,
       source: override != null ? "override" : null,
     };
   }
 
-  // Derive lap-run-only durations from the lap rows. Wall-clock per lap
-  // is end-to-end; subtract pit duration to get running portion.
   const completed = laps.filter(
     (l): l is typeof l & { lapCompletedAt: string } => !!l.lapCompletedAt,
   );
 
+  const targets = new Map<number, number>();
   let autoSec: number | null = null;
   if (completed.length > 0) {
-    // Run-only seconds per lap: use this lap's own start→end window.
-    // (lap.pitStartedAt / pitCompletedAt now describe the pit AFTER this
-    // lap, so they're not the right subtraction for this lap's run.)
+    // Walk each completed lap, snapshotting the recommendation at that
+    // point in the race. Run-only seconds come from the lap's own
+    // lapStartedAt → lapCompletedAt window.
     const lapRunSecs: number[] = [];
-    let lastEndMs = RACE_START.getTime();
-    for (const l of completed) {
+    let lastPositive: number | null = null;
+    for (let i = 0; i < completed.length; i++) {
+      const l = completed[i];
       const endMs = new Date(l.lapCompletedAt).getTime();
       if (l.lapStartedAt) {
         const startMs = new Date(l.lapStartedAt).getTime();
         lapRunSecs.push(Math.max(0, (endMs - startMs) / 1000));
       }
-      lastEndMs = endMs;
+      // Need at least one run sample to project from.
+      if (lapRunSecs.length === 0) continue;
+      const totalSecHere = (endMs - RACE_START.getTime()) / 1000;
+      const rec = recommendPitSec({
+        goalMiles: followed.goalMiles,
+        laps: i + 1,
+        totalSec: totalSecHere,
+        lapRunSecs: lapRunSecs.slice(),
+      });
+      if (rec != null && rec > 0) {
+        targets.set(l.lapNumber, rec);
+        lastPositive = rec;
+      } else if (lastPositive != null) {
+        // Math says "behind" from here on — keep coloring against the
+        // last sustainable budget so the user can see whether a given
+        // pit was a deviation from that benchmark or in line with it.
+        targets.set(l.lapNumber, lastPositive);
+      }
     }
-    const totalSec = (lastEndMs - RACE_START.getTime()) / 1000;
-    if (lapRunSecs.length > 0) {
+    // autoSec for the headline is the recommendation AT the latest lap,
+    // not the sticky version — the headline should reflect actual state.
+    if (completed.length > 0) {
+      const last = completed[completed.length - 1];
+      const lastEndMs = new Date(last.lapCompletedAt).getTime();
+      const totalSec = (lastEndMs - RACE_START.getTime()) / 1000;
       autoSec = recommendPitSec({
         goalMiles: followed.goalMiles,
         laps: completed.length,
@@ -72,15 +103,19 @@ export function useEffectivePitSec(bib: number): EffectivePitSec {
     }
   }
 
-  // User override wins for the effective value, but autoSec is always
-  // exposed independently so per-card displays can color against it.
   if (followed.goalPitSec != null && followed.goalPitSec > 0) {
-    return { sec: followed.goalPitSec, autoSec, source: "override" };
+    return {
+      sec: followed.goalPitSec,
+      autoSec,
+      targets,
+      source: "override",
+    };
   }
 
   return {
     sec: autoSec,
     autoSec,
+    targets,
     source: autoSec != null ? "recommended" : null,
   };
 }

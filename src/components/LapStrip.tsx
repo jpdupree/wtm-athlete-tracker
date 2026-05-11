@@ -12,12 +12,16 @@ export function LapStrip({ bib, lapCount }: { bib: number; lapCount: number }) {
     () => db.laps.where("bib").equals(bib).sortBy("lapNumber"),
     [bib],
   );
-  // Single source of truth for the pit threshold — user override OR the
-  // auto-recommendation. Color each past pit relative to the *current*
-  // budget so the strip tells the crew at a glance which pits, if
-  // repeated, would still be sustainable for the goal.
+  // Each pit gets its own threshold based on what the budget WAS at that
+  // point in the race (sticky-last-positive when math goes negative), so
+  // a slow pit late in the race doesn't paint earlier sustainable pits
+  // red. An override on the followed athlete short-circuits and applies
+  // to every pit.
   const effectivePit = useEffectivePitSec(bib);
-  const targetPitSec = effectivePit.sec ?? null;
+  const targetForLap = (n: number): number | null => {
+    if (effectivePit.source === "override") return effectivePit.sec;
+    return effectivePit.targets.get(n) ?? effectivePit.autoSec ?? null;
+  };
 
   if (lapCount === 0) return null;
 
@@ -61,7 +65,7 @@ export function LapStrip({ bib, lapCount }: { bib: number; lapCount: number }) {
               {it.pitSec != null && (
                 <p
                   className={`text-[10px] tabular-nums ${pitStatusClass(
-                    pitStatus(it.pitSec, targetPitSec),
+                    pitStatus(it.pitSec, targetForLap(it.n)),
                   )}`}
                 >
                   pit {fmtSec(Math.round(it.pitSec))}

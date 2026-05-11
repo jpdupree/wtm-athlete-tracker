@@ -192,13 +192,16 @@ function PitTimer({ bib, lapNumber }: { bib: number; lapNumber: number }) {
     start && end
       ? Math.round((new Date(end).getTime() - new Date(start).getTime()) / 1000)
       : null;
-  // Color the pit duration against the AUTO recommendation, regardless
-  // of whether the athlete has a personal pit-goal override set. The
-  // per-card view is meant to reflect the math, not the manual target.
-  const { autoSec } = useEffectivePitSec(bib);
+  // Color the pit duration against the per-lap auto target (sticky-last-
+  // positive when the rolling recommendation has gone non-positive), so
+  // past pits read against the budget that was in effect at that lap
+  // rather than the current state. The override is intentionally ignored
+  // here — these cards reflect the math.
+  const { targets, autoSec } = useEffectivePitSec(bib);
+  const targetForThisLap = targets.get(lapNumber) ?? autoSec ?? null;
   const colorClass =
     durationSec != null
-      ? pitStatusClass(pitStatus(durationSec, autoSec))
+      ? pitStatusClass(pitStatus(durationSec, targetForThisLap))
       : "";
   return (
     <div className="px-4 py-3 space-y-2">
