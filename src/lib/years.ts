@@ -33,9 +33,30 @@ export const YEARS: YearConfig[] = [
     venue: "Atlanta Motor Speedway",
     hasData: false,
   },
-  { year: 2023, eventId: null, liveStreamUrl: null, venue: "Atlanta Motor Speedway", hasData: false },
-  { year: 2024, eventId: null, liveStreamUrl: null, venue: "Atlanta Motor Speedway", hasData: false },
-  { year: 2025, eventId: "348237", liveStreamUrl: null, venue: "Belvoir Castle", hasData: true },
+  {
+    year: 2023,
+    eventId: null,
+    liveStreamUrl:
+      "https://youtube.com/playlist?list=PLyK0g0eIg3RUsISbDpQ4GVWqpQeYojXrD&si=sLFvoifPBAvlFIDD",
+    venue: "Atlanta Motor Speedway",
+    hasData: false,
+  },
+  {
+    year: 2024,
+    eventId: null,
+    liveStreamUrl:
+      "https://youtube.com/playlist?list=PLyK0g0eIg3RVw1pdRLA86GNFXJnAfcKeb&si=Qe3MMiChPpJwoc71",
+    venue: "Atlanta Motor Speedway",
+    hasData: false,
+  },
+  {
+    year: 2025,
+    eventId: "348237",
+    liveStreamUrl:
+      "https://youtube.com/playlist?list=PLyK0g0eIg3RWM689bEHjn1e8Tr0Vjoeau&si=TVcm_64RIbtH8Esk",
+    venue: "Belvoir Castle",
+    hasData: true,
+  },
   { year: 2026, eventId: null, liveStreamUrl: "https://www.youtube.com/@theocrreport/live", venue: "TBA", hasData: false },
 ];
 
