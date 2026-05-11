@@ -15,3 +15,27 @@ export function fmtAge(ms: number): string {
   const h = Math.floor(m / 60);
   return `${h}h ago`;
 }
+
+export function fmtCountdown(ms: number): string {
+  if (ms <= 0) return "0s";
+  const s = Math.floor(ms / 1000);
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (d > 0) return `${d}d ${h}h ${m}m`;
+  if (h > 0) return `${h}h ${m}m ${String(sec).padStart(2, "0")}s`;
+  return `${m}m ${String(sec).padStart(2, "0")}s`;
+}
+
+// Render an ISO timestamp as "Sat 12:00 BST" — venue local clock.
+export function fmtVenueClock(iso: string | Date): string {
+  const d = iso instanceof Date ? iso : new Date(iso);
+  return d.toLocaleString("en-GB", {
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/London",
+    timeZoneName: "short",
+  });
+}
