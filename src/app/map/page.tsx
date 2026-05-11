@@ -17,25 +17,54 @@ export default function MapPage() {
 
   return (
     <main className="mx-auto max-w-md px-4 py-6 space-y-4">
-      <Link href="/" className="text-sm opacity-70">← Home</Link>
-      <header>
-        <h1 className="text-2xl font-bold">Course view</h1>
-        <p className="text-sm opacity-60">
+      <Link
+        href="/"
+        className="inline-flex items-center gap-1 text-xs uppercase tracking-wider opacity-60 hover:opacity-100"
+      >
+        <span style={{ color: "var(--wtm-accent)" }}>←</span> Home
+      </Link>
+
+      <header
+        className="rounded-lg px-4 py-4 space-y-2"
+        style={{
+          border: "1px solid var(--wtm-border)",
+          background: "var(--wtm-surface)",
+          borderLeft: "3px solid var(--wtm-accent)",
+        }}
+      >
+        <h1 className="wtm-display text-3xl leading-none">Course view</h1>
+        <p className="text-xs opacity-60 leading-snug">
           Predicted position by lap fraction. A real map lands once Tough
           Mudder shares GPX for the course.
         </p>
       </header>
 
       {(!followed || followed.length === 0) && (
-        <p className="rounded-lg border border-dashed border-current/20 p-6 text-center text-sm opacity-70">
-          Follow some athletes from <Link href="/add" className="underline">Add</Link> first.
+        <p
+          className="rounded-lg p-6 text-center text-sm opacity-70"
+          style={{ border: "1px dashed var(--wtm-border-strong)" }}
+        >
+          Follow some athletes from{" "}
+          <Link
+            href="/add"
+            className="underline"
+            style={{ color: "var(--wtm-accent)" }}
+          >
+            Add
+          </Link>{" "}
+          first.
         </p>
       )}
 
       {followed && followed.length > 0 && (
         <ul className="space-y-3">
           {followed.map((a) => (
-            <AthleteRow key={a.bib} athlete={a} now={now} apiRow={data?.rows.find((r) => r.bib === a.bib) ?? null} />
+            <AthleteRow
+              key={a.bib}
+              athlete={a}
+              now={now}
+              apiRow={data?.rows.find((r) => r.bib === a.bib) ?? null}
+            />
           ))}
         </ul>
       )}
@@ -71,12 +100,29 @@ function AthleteRow({
   });
 
   return (
-    <li className="rounded-lg border border-current/20 px-4 py-3 space-y-2">
+    <li
+      className="rounded-lg px-4 py-3 space-y-2"
+      style={{
+        border: "1px solid var(--wtm-border)",
+        background: "var(--wtm-surface)",
+        opacity: athlete.paused ? 0.55 : 1,
+      }}
+    >
       <div className="flex items-baseline justify-between gap-2">
         <Link href={`/a/${athlete.bib}`} className="min-w-0">
-          <p className="truncate text-sm font-semibold">{athlete.name}</p>
+          <p className="truncate text-sm font-semibold flex items-center gap-1.5">
+            {athlete.paused && (
+              <span
+                className="rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+                style={{ background: "var(--wtm-border)", color: "var(--wtm-fg-muted)" }}
+              >
+                Paused
+              </span>
+            )}
+            <span className="truncate">{athlete.name}</span>
+          </p>
           <p className="truncate text-xs opacity-60">
-            #{athlete.bib}
+            <span style={{ color: "var(--wtm-accent)" }}>#{athlete.bib}</span>
             {pos.state === "racing" && ` · lap ${pos.currentLap}`}
             {pos.state === "pre-race" && " · pre-race"}
             {pos.state === "ended" && " · race ended"}
@@ -89,12 +135,17 @@ function AthleteRow({
       </div>
 
       <div
-        className="h-2 w-full overflow-hidden rounded-full bg-current/10"
+        className="h-2 w-full overflow-hidden rounded-full"
+        style={{ background: "var(--wtm-border)" }}
         aria-label={`${Math.round(pos.fraction * 100)}% through lap`}
       >
         <div
-          className="h-full bg-current/60"
-          style={{ width: `${Math.round(pos.fraction * 100)}%` }}
+          className="h-full"
+          style={{
+            width: `${Math.round(pos.fraction * 100)}%`,
+            background: "var(--wtm-accent)",
+            transition: "width 600ms ease-out",
+          }}
         />
       </div>
 
