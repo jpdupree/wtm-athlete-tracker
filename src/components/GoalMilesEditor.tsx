@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { fmtSec } from "@/lib/format";
-import { sumPitSec } from "@/lib/intake";
+import { pitStatus, pitStatusClass, sumPitSec } from "@/lib/intake";
 import { LAP_MILES } from "@/lib/race";
 
 // Accepts "5", "5:30", "05:30" — returns total seconds, or null on empty / bad.
@@ -17,12 +17,6 @@ function parsePitInput(s: string): number | null {
   const secs = m[2] != null ? parseInt(m[2], 10) : 0;
   if (!Number.isFinite(mins) || !Number.isFinite(secs) || secs >= 60) return null;
   return mins * 60 + secs;
-}
-
-function pitStatusColor(avgSec: number, goalSec: number): string {
-  if (avgSec <= goalSec) return "text-green-500";
-  if (avgSec <= goalSec * 1.25) return "text-amber-500";
-  return "text-red-500";
 }
 
 export function GoalMilesEditor({
@@ -47,10 +41,11 @@ export function GoalMilesEditor({
   const avgPitSec = pitCount > 0 ? sumPitSec(lapRows ?? []) / pitCount : null;
 
   if (!editing) {
-    const pitColor =
+    const pitColorStatus =
       goalPitSec != null && avgPitSec != null
-        ? pitStatusColor(avgPitSec, goalPitSec)
-        : "";
+        ? pitStatus(avgPitSec, goalPitSec)
+        : "none";
+    const pitColor = pitColorStatus === "none" ? "" : pitStatusClass(pitColorStatus);
     return (
       <button
         onClick={() => {
@@ -78,11 +73,11 @@ export function GoalMilesEditor({
                 <span className={`font-medium ${pitColor}`}>
                   {fmtSec(Math.round(avgPitSec))}
                 </span>
-                {goalPitSec != null && pitCount > 0 && (
+                {pitColorStatus !== "none" && pitCount > 0 && (
                   <span className={`ml-1 ${pitColor}`}>
-                    {avgPitSec <= goalPitSec
+                    {pitColorStatus === "green"
                       ? "✓"
-                      : avgPitSec <= goalPitSec * 1.25
+                      : pitColorStatus === "amber"
                         ? "≈"
                         : "✗"}
                   </span>

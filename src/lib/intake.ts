@@ -73,6 +73,39 @@ export function sumPitSec(laps: Lap[]): number {
   return Math.max(0, total);
 }
 
+export type PitStatus = "green" | "amber" | "red" | "none";
+
+// Color a measured pit time relative to the athlete's goal pit time.
+// Returns "none" when no goal is set; callers should render neutral in that
+// case rather than fall back to a hardcoded threshold.
+//   green: at or under goal
+//   amber: over goal but within 2.5%
+//   red:   over goal by more than 2.5%
+const PIT_AMBER_OVER = 1.025;
+
+export function pitStatus(
+  pitSec: number,
+  goalPitSec: number | null | undefined,
+): PitStatus {
+  if (goalPitSec == null || goalPitSec <= 0) return "none";
+  if (pitSec <= goalPitSec) return "green";
+  if (pitSec <= goalPitSec * PIT_AMBER_OVER) return "amber";
+  return "red";
+}
+
+export function pitStatusClass(status: PitStatus): string {
+  switch (status) {
+    case "green":
+      return "text-green-500";
+    case "amber":
+      return "text-amber-500";
+    case "red":
+      return "text-red-500";
+    default:
+      return "opacity-70";
+  }
+}
+
 // "Per hour" rate by course time (total - pits). Falls back to total elapsed
 // when no pits are recorded (early race or crew hasn't logged any).
 export function computeRates(opts: {

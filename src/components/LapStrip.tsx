@@ -3,6 +3,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { fmtSec } from "@/lib/format";
+import { pitStatus, pitStatusClass } from "@/lib/intake";
 import { RACE_START } from "@/lib/race";
 
 export function LapStrip({ bib, lapCount }: { bib: number; lapCount: number }) {
@@ -10,6 +11,8 @@ export function LapStrip({ bib, lapCount }: { bib: number; lapCount: number }) {
     () => db.laps.where("bib").equals(bib).sortBy("lapNumber"),
     [bib],
   );
+  const followed = useLiveQuery(() => db.followed.get(bib), [bib]);
+  const goalPitSec = followed?.goalPitSec ?? null;
 
   if (lapCount === 0) return null;
 
@@ -51,7 +54,11 @@ export function LapStrip({ bib, lapCount }: { bib: number; lapCount: number }) {
                 {it.durationSec ? fmtSec(it.durationSec) : "—"}
               </p>
               {it.pitSec != null && (
-                <p className={`text-[10px] tabular-nums ${pitColor(it.pitSec)}`}>
+                <p
+                  className={`text-[10px] tabular-nums ${pitStatusClass(
+                    pitStatus(it.pitSec, goalPitSec),
+                  )}`}
+                >
                   pit {fmtSec(Math.round(it.pitSec))}
                 </p>
               )}
@@ -61,10 +68,4 @@ export function LapStrip({ bib, lapCount }: { bib: number; lapCount: number }) {
       </ul>
     </div>
   );
-}
-
-function pitColor(sec: number): string {
-  if (sec <= 15 * 60) return "text-green-500";
-  if (sec <= 25 * 60) return "text-amber-500";
-  return "text-red-500";
 }
