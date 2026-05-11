@@ -81,14 +81,16 @@ export function LapCard({
         </span>
         <span className="flex items-center gap-2 shrink-0">
           {source === "manual" && provisional && (
-            <span className="rounded-full border border-amber-500/50 bg-amber-500/10 px-2 py-0.5 text-[10px] uppercase tracking-wide">
-              manual
-            </span>
+            <PencilIcon
+              className="text-amber-500"
+              title="Manually entered (provisional)"
+            />
           )}
           {source === "api" && (
-            <span className="rounded-full border border-green-500/50 bg-green-500/10 px-2 py-0.5 text-[10px] uppercase tracking-wide">
-              api
-            </span>
+            <CheckIcon
+              className="text-green-500"
+              title="Confirmed by results feed"
+            />
           )}
           <Counts bib={bib} lapNumber={lapNumber} />
         </span>
@@ -442,5 +444,48 @@ function AddNote({ bib, lapNumber, target }: { bib: number; lapNumber: number; t
         Add
       </button>
     </form>
+  );
+}
+
+function CheckIcon({ className, title }: { className?: string; title?: string }) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      role="img"
+      aria-label={title ?? "Confirmed"}
+    >
+      {title && <title>{title}</title>}
+      <path d="M4 10.5l4 4 8-9" />
+    </svg>
+  );
+}
+
+function PencilIcon({ className, title }: { className?: string; title?: string }) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      role="img"
+      aria-label={title ?? "Manual entry"}
+    >
+      {title && <title>{title}</title>}
+      <path d="M14.5 3.5l2 2-9 9-3 1 1-3 9-9z" />
+      <path d="M12.5 5.5l2 2" />
+    </svg>
   );
 }
