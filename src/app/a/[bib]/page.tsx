@@ -39,13 +39,19 @@ export default function AthleteDetailPage({
     return () => clearTimeout(t);
   }, []);
 
-  // We can render the page as soon as we have the feed row, even if the
-  // user hasn't followed this athlete. Followed-only sections (goal
-  // editor, lap cards, intake) gate on `followed` below.
-  if (loading && !row) {
+  // Wait until we have SOMETHING to render: either a resolved followed
+  // record (so we know we're following them) or a feed row. Manually-
+  // added athletes won't be in the feed, so we have to be willing to
+  // render with only the followed record.
+  const followedResolved =
+    followed !== undefined || followedTimedOut ? (followed ?? null) : undefined;
+  const isFollowed = !!followedResolved;
+  const isLoadingFollowed = followedResolved === undefined;
+
+  if (isLoadingFollowed && loading && !row) {
     return <p className="p-6 text-sm opacity-50">Loading…</p>;
   }
-  if (error && !row) {
+  if (error && !row && !isFollowed) {
     return (
       <main className="mx-auto max-w-md px-4 py-6 space-y-3">
         <Link
@@ -60,23 +66,18 @@ export default function AthleteDetailPage({
       </main>
     );
   }
-  if (!row) {
+  // Only short-circuit to "not in feed" if the visitor also doesn't
+  // follow this athlete. A followed manual-entry has no feed row but
+  // still deserves the full interactive view below.
+  if (!row && !isFollowed) {
     return <NotInFeed bib={bib} />;
   }
 
-  // From here on, `row` exists. `followed` may still be undefined (loading)
-  // or null (not in this device's DB). After the timeout, treat undefined
-  // as null so the page proceeds in webviews where dexie hangs.
-  const followedResolved =
-    followed !== undefined || followedTimedOut ? (followed ?? null) : undefined;
-  const isFollowed = !!followedResolved;
-  const isLoadingFollowed = followedResolved === undefined;
-
-  const displayName = followedResolved?.name ?? row.name;
+  const displayName = followedResolved?.name ?? row?.name ?? `Bib #${bib}`;
   const displayBib = bib;
-  const displayGender = followedResolved?.gender ?? row.gender ?? null;
+  const displayGender = followedResolved?.gender ?? row?.gender ?? null;
 
-  const apiLaps = row.laps ?? 0;
+  const apiLaps = row?.laps ?? 0;
   const lapNumbers: number[] = [];
   for (let n = apiLaps + 1; n >= 1; n--) lapNumbers.push(n);
 
@@ -113,8 +114,8 @@ export default function AthleteDetailPage({
           </span>
           {displayGender && ` · ${displayGender}`}
           {followedResolved?.team && ` · ${followedResolved.team}`}
-          {row.nation && ` · ${row.nation}`}
-          {(row.overallRank > 0 || row.genderRank > 0) && (
+          {row?.nation && ` · ${row.nation}`}
+          {row && (row.overallRank > 0 || row.genderRank > 0) && (
             <>
               {" "}· #{row.overallRank} overall
               {row.genderRank > 0 && (
@@ -125,6 +126,11 @@ export default function AthleteDetailPage({
               {row.ageGroupRank != null && <> · #{row.ageGroupRank} AG</>}
             </>
           )}
+          {!row && isFollowed && (
+            <>
+              {" "}· <span className="italic">manual entry</span>
+            </>
+          )}
         </p>
       </header>
 
@@ -133,7 +139,7 @@ export default function AthleteDetailPage({
       {/* Non-followed (or still-loading-followed) visitors see a read-only
           snapshot built from the live feed row. A one-tap follow button
           upgrades them to the full interactive view in this same session. */}
-      {!isFollowed && (
+      {!isFollowed && row && (
         <>
           <PublicSummary row={row} ageMs={ageMs} />
           <FollowCTA
@@ -154,14 +160,14 @@ export default function AthleteDetailPage({
 
           <FinishPrediction
             bib={bib}
-            totalSec={row.totalSec ?? 0}
-            laps={row.laps ?? 0}
+            totalSec={row?.totalSec ?? 0}
+            laps={row?.laps ?? 0}
             goalMiles={followedResolved.goalMiles}
           />
 
           <IntakeBars
             bib={bib}
-            totalSec={row.totalSec ?? 0}
+            totalSec={row?.totalSec ?? 0}
             targets={{
               calPerHr: followedResolved.targetCalPerHr,
               fluidMlPerHr: followedResolved.targetFluidMlPerHr,
@@ -173,17 +179,17 @@ export default function AthleteDetailPage({
           <div className="print-page-before">
             <PaceChart
               bib={bib}
-              totalSec={row.totalSec ?? 0}
-              laps={row.laps ?? 0}
+              totalSec={row?.totalSec ?? 0}
+              laps={row?.laps ?? 0}
               goalMiles={followedResolved.goalMiles}
             />
           </div>
 
           <StatsGrid
             bib={bib}
-            totalSec={row.totalSec ?? 0}
-            laps={row.laps ?? 0}
-            lastLapSec={row.lastLapSec ?? null}
+            totalSec={row?.totalSec ?? 0}
+            laps={row?.laps ?? 0}
+            lastLapSec={row?.lastLapSec ?? null}
           />
 
           <section className="space-y-2">
@@ -192,7 +198,7 @@ export default function AthleteDetailPage({
                 Laps &amp; pits
               </h2>
               <span className="text-xs opacity-50">
-                feed updated {fmtAge(ageMs)}
+                {row ? `feed updated ${fmtAge(ageMs)}` : "manual entry — no feed data"}
               </span>
             </div>
 
