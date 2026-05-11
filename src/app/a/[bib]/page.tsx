@@ -16,6 +16,7 @@ import { StatsGrid } from "@/components/StatsGrid";
 import { LapStrip } from "@/components/LapStrip";
 import { LapCard } from "@/components/LapCard";
 import { PrintButton } from "@/components/PrintButton";
+import { ShareButton } from "@/components/ShareButton";
 
 export default function AthleteDetailPage({
   params,
@@ -59,7 +60,10 @@ export default function AthleteDetailPage({
         >
           <span style={{ color: "var(--wtm-accent)" }}>←</span> Home
         </Link>
-        <PrintButton />
+        <div className="flex items-center gap-2">
+          <ShareButton name={followed.name} bib={followed.bib} />
+          <PrintButton />
+        </div>
       </div>
 
       <header
