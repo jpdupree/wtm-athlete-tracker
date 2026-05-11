@@ -14,7 +14,7 @@ export function IntakeTargetsEditor({ athlete }: { athlete: FollowedAthlete }) {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="text-xs underline opacity-70"
+        className="text-xs underline opacity-70 print-hide"
       >
         Adjust intake targets
       </button>

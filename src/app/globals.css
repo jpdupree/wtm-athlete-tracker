@@ -131,10 +131,27 @@ html:not([data-theme="light"]) .wtm-logo-light { display: none; }
   /* Keep sections together on a page when possible. */
   details, header, section, footer, form { break-inside: avoid; }
 
+  /* Force a page break before any element tagged .print-page-before —
+     used to put the pace chart on its own page so the chart isn't
+     squeezed onto a partial page next to the goal/intake sections. */
+  .print-page-before {
+    break-before: page;
+    page-break-before: always;
+  }
+
   /* SVGs (pace chart) print as black-ink line art by default. */
   svg { color: black; }
 
   /* Two-up grids that look too wide on paper — the StatsGrid is fine
      wider, so this is just a fallback for the IntakeBars/etc. */
   .grid { gap: 0.25rem !important; }
+
+  /* LapStrip uses a horizontal scroll on screen; in print, let the
+     badges wrap so every lap is visible without scrolling. */
+  .print-stack {
+    overflow: visible !important;
+  }
+  .print-stack > ul {
+    flex-wrap: wrap !important;
+  }
 }

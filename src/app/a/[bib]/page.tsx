@@ -114,12 +114,14 @@ export default function AthleteDetailPage({
       />
       <IntakeTargetsEditor athlete={followed} />
 
-      <PaceChart
-        bib={bib}
-        totalSec={row?.totalSec ?? 0}
-        laps={row?.laps ?? 0}
-        goalMiles={followed.goalMiles}
-      />
+      <div className="print-page-before">
+        <PaceChart
+          bib={bib}
+          totalSec={row?.totalSec ?? 0}
+          laps={row?.laps ?? 0}
+          goalMiles={followed.goalMiles}
+        />
+      </div>
 
       <StatsGrid
         bib={bib}

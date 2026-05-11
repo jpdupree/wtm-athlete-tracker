@@ -50,7 +50,7 @@ export function LapStrip({ bib, lapCount }: { bib: number; lapCount: number }) {
   }
 
   return (
-    <div className="-mx-4 overflow-x-auto px-4">
+    <div className="-mx-4 overflow-x-auto px-4 print-stack">
       <ul className="flex gap-2 min-w-min pb-1">
         {items.map((it) => (
           <li key={it.n} className="shrink-0">
