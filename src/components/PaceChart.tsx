@@ -90,6 +90,19 @@ export function PaceChart({
     const thisLapDur = lapEndSec - prevEndSecForDur;
     const throughThis = [...priorDurs, thisLapDur];
 
+    // The first few laps don't carry enough signal to confidently call a
+    // segment off-pace — leave them neutral (gray) so we don't shout red
+    // at someone who's just settling into a routine.
+    const MIN_LAPS_FOR_COLOR = 4;
+    const statusAtLapEnd =
+      n >= MIN_LAPS_FOR_COLOR
+        ? paceStatus({ totalSec: lapEndSec, laps: n, goalMiles, lapSecs: throughThis })
+        : null;
+    const statusAtPitEnd =
+      n - 1 >= MIN_LAPS_FOR_COLOR
+        ? paceStatus({ totalSec: lapEndSec, laps: n - 1, goalMiles, lapSecs: priorDurs })
+        : null;
+
     const hasPit = lap.pitStartedAt && lap.pitCompletedAt;
     const hasLapStart = !!lap.lapStartedAt;
 
@@ -97,36 +110,21 @@ export function PaceChart({
       const pitStartSec = secFromStart(lap.pitStartedAt!);
       const pitEndSec = secFromStart(lap.pitCompletedAt!);
       const lapStartSec = secFromStart(lap.lapStartedAt!);
-      // Pit segment (horizontal — no miles gained).
       segments.push({
         kind: "pit",
         x1: pitStartSec,
         y1: prevY,
         x2: pitEndSec,
         y2: prevY,
-        status:
-          n > 1
-            ? paceStatus({
-                totalSec: pitEndSec,
-                laps: n - 1,
-                goalMiles,
-                lapSecs: priorDurs,
-              })
-            : null,
+        status: statusAtPitEnd,
       });
-      // Lap segment (diagonal).
       segments.push({
         kind: "lap",
         x1: lapStartSec,
         y1: prevY,
         x2: lapEndSec,
         y2: lapEndY,
-        status: paceStatus({
-          totalSec: lapEndSec,
-          laps: n,
-          goalMiles,
-          lapSecs: throughThis,
-        }),
+        status: statusAtLapEnd,
       });
     } else if (hasLapStart) {
       segments.push({
@@ -135,12 +133,7 @@ export function PaceChart({
         y1: prevY,
         x2: lapEndSec,
         y2: lapEndY,
-        status: paceStatus({
-          totalSec: lapEndSec,
-          laps: n,
-          goalMiles,
-          lapSecs: throughThis,
-        }),
+        status: statusAtLapEnd,
       });
     } else {
       // No segment-level breakdown — fall back to one combined line from
@@ -151,12 +144,7 @@ export function PaceChart({
         y1: lastLapEndMiles,
         x2: lapEndSec,
         y2: lapEndY,
-        status: paceStatus({
-          totalSec: lapEndSec,
-          laps: n,
-          goalMiles,
-          lapSecs: throughThis,
-        }),
+        status: statusAtLapEnd,
       });
     }
 

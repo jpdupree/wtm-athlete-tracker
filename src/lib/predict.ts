@@ -1,15 +1,18 @@
 import { LAP_MILES, RACE_END, RACE_START } from "./race";
 
 // Median lap-to-lap wall-clock ratios (pit + run) computed from
-// test/fixtures/lap_details_individual.csv across all 603 individual + team
-// member entrants in WTM 2025 Belvoir. Index k = the K→K+1 transition.
-//   k=0 → lap1 → lap2 (median 1.349 — partly the first pit being inserted)
-//   k=8 → lap9 → lap10 (median ~1.0; settled into pace)
-//   k>14 → small sample (n<32) — clipped to 1.0 to avoid late-race noise.
-// For athletes deeper than this table goes, fade stays at neutral.
+// test/fixtures/lap_details_individual.csv, FILTERED to athletes who
+// completed at least 12 laps (n=145) — the finisher cohort. Using the
+// full field instead inflated early ratios with mid-pack athletes whose
+// lap times doubled by lap 5, which compounded to absurdly pessimistic
+// projections for finishers.
+//
+// Index k = the (k)→(k+1) transition (so FADE_RATIOS[0] is lap 1 → 2).
+// Cumulative product through lap 15: 2.74× (was 3.49× with the full field).
+// k > 14 falls off the table (n thins toward elites) — treat as 1.0.
 const FADE_RATIOS: number[] = [
-  1.349, 1.267, 1.146, 1.136, 1.145,
-  1.117, 1.094, 1.059, 1.002, 1.054,
+  1.204, 1.211, 1.152, 1.117, 1.053,
+  1.087, 1.081, 1.081, 1.027, 1.060,
   0.993, 0.986, 1.010, 1.013, 0.988,
 ];
 
