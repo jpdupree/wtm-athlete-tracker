@@ -133,32 +133,66 @@ export default function HomePage() {
         ))}
       </nav>
 
-      <footer className="pt-2">
-        <p className="text-[10px] uppercase tracking-[0.18em] opacity-50 pl-1 mb-2">
-          Follow The OCR Report
-        </p>
-        <div className="flex items-center justify-center gap-3">
-          {SOCIAL.map(({ label, href, icon: Icon }) => (
-            <a
-              key={label}
-              href={href}
-              target="_blank"
-              rel="noreferrer"
-              aria-label={label}
-              title={label}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-md transition-colors"
-              style={{
-                border: "1px solid var(--wtm-border)",
-                background: "var(--wtm-surface)",
-                color: "var(--wtm-fg)",
-              }}
-            >
-              <Icon />
-            </a>
-          ))}
+      <footer className="pt-2 space-y-6">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.18em] opacity-50 pl-1 mb-2">
+            Follow The OCR Report
+          </p>
+          <div className="flex items-center justify-center gap-3">
+            {SOCIAL.map(({ label, href, icon: Icon }) => (
+              <a
+                key={label}
+                href={href}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={label}
+                title={label}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-md transition-colors"
+                style={{
+                  border: "1px solid var(--wtm-border)",
+                  background: "var(--wtm-surface)",
+                  color: "var(--wtm-fg)",
+                }}
+              >
+                <Icon />
+              </a>
+            ))}
+          </div>
+        </div>
+
+        <div
+          className="pt-5 flex flex-col items-center gap-2"
+          style={{ borderTop: "1px solid var(--wtm-border)" }}
+        >
+          <BrandMark />
+          <p className="text-[10px] opacity-50 tabular-nums">
+            © {new Date().getFullYear()} The OCR Report
+          </p>
         </div>
       </footer>
     </main>
+  );
+}
+
+// Text wordmark that follows the theme: foreground colour for the outer
+// words, brand accent for "OCR", and a short underline rule. Swap this
+// for a real <img> / <svg> drop-in when the OCR Report logo exists.
+function BrandMark() {
+  return (
+    <div className="flex flex-col items-center gap-1.5 select-none">
+      <p
+        className="wtm-display text-xl leading-none"
+        style={{ color: "var(--wtm-fg)" }}
+      >
+        The{" "}
+        <span style={{ color: "var(--wtm-accent)" }}>OCR</span>{" "}
+        Report
+      </p>
+      <div
+        className="h-px w-16"
+        style={{ background: "var(--wtm-accent)" }}
+      />
+    </div>
   );
 }
 
