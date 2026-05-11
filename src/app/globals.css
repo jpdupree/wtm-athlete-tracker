@@ -1,7 +1,54 @@
 @import "tailwindcss";
 
+/* WTM brand tokens.
+   Orange is the Tough Mudder accent; backgrounds lean very dark / mud-ish
+   for the overnight-race feel. Semantic colors (green/amber/red used for
+   pace status) are intentionally left to Tailwind's palette so they keep
+   their meaning. */
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
+  --wtm-bg: #0a0a0a;
+  --wtm-surface: #141414;
+  --wtm-surface-2: #1c1c1c;
+  --wtm-border: rgba(255, 255, 255, 0.10);
+  --wtm-border-strong: rgba(255, 255, 255, 0.22);
+  --wtm-fg: #f5f5f4;
+  --wtm-fg-muted: rgba(245, 245, 244, 0.62);
+  --wtm-accent: #ff6b14;
+  --wtm-accent-dim: rgba(255, 107, 20, 0.18);
+  --wtm-danger: #ef4444;
 }
 
-html, body { background: Canvas; color: CanvasText; }
+html, body {
+  background: var(--wtm-bg);
+  color: var(--wtm-fg);
+}
+
+/* "WTM display" — applied to headers via the .wtm-display class.
+   The font itself is loaded in layout.tsx via next/font/google. */
+.wtm-display {
+  font-family: var(--font-wtm-display), "Impact", "Arial Narrow Bold", sans-serif;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Subtle grit on the body so it doesn't feel like an empty void.
+   SVG noise; cheap and doesn't ship raster assets. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.04;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.7 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+
+/* Mobile webkit tap highlight bleeds the system blue. Use the brand. */
+* {
+  -webkit-tap-highlight-color: rgba(255, 107, 20, 0.25);
+}
+
+/* Slim scrollbar that matches the dark surface. */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: var(--wtm-border-strong); border-radius: 3px; }

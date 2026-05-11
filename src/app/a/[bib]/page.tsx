@@ -51,20 +51,34 @@ export default function AthleteDetailPage({
 
   return (
     <main className="mx-auto max-w-md px-4 py-6 space-y-4">
-      <Link href="/" className="text-sm opacity-70">← Home</Link>
+      <Link
+        href="/"
+        className="inline-flex items-center gap-1 text-xs uppercase tracking-wider opacity-60 hover:opacity-100"
+      >
+        <span style={{ color: "var(--wtm-accent)" }}>←</span> Home
+      </Link>
 
-      <header>
-        <h1 className="text-2xl font-bold">{followed.name}</h1>
-        <p className="text-sm opacity-60">
-          #{followed.bib}
+      <header
+        className="rounded-lg px-4 py-4 space-y-2"
+        style={{
+          border: "1px solid var(--wtm-border)",
+          background: "var(--wtm-surface)",
+          borderLeft: "3px solid var(--wtm-accent)",
+        }}
+      >
+        <h1 className="wtm-display text-3xl leading-none">{followed.name}</h1>
+        <p className="text-xs opacity-60 tabular-nums">
+          <span className="font-semibold" style={{ color: "var(--wtm-accent)" }}>
+            #{followed.bib}
+          </span>
           {(followed.gender ?? row?.gender) && ` · ${followed.gender ?? row?.gender}`}
           {followed.team && ` · ${followed.team}`}
-          {row && ` · ${row.nation}`}
+          {row && row.nation && ` · ${row.nation}`}
           {row && (row.overallRank > 0 || row.genderRank > 0) && (
             <>
-              {" "}· <span className="tabular-nums">#{row.overallRank} overall</span>
-              {row.genderRank > 0 && <> · <span className="tabular-nums">#{row.genderRank} {followed.gender ?? row.gender ?? "gender"}</span></>}
-              {row.ageGroupRank != null && <> · <span className="tabular-nums">#{row.ageGroupRank} AG</span></>}
+              {" "}· #{row.overallRank} overall
+              {row.genderRank > 0 && <> · #{row.genderRank} {followed.gender ?? row.gender ?? "gender"}</>}
+              {row.ageGroupRank != null && <> · #{row.ageGroupRank} AG</>}
             </>
           )}
         </p>

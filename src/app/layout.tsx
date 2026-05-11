@@ -1,8 +1,15 @@
 import type { Metadata, Viewport } from "next";
+import { Bebas_Neue } from "next/font/google";
 import "./globals.css";
 import { FeedProvider } from "@/components/FeedProvider";
 import { LapSyncProvider } from "@/components/LapSyncProvider";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
+
+const displayFont = Bebas_Neue({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--font-wtm-display",
+});
 
 export const metadata: Metadata = {
   title: "WTM Athlete Tracker",
@@ -21,7 +28,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={displayFont.variable}>
       <body className="min-h-screen antialiased">
         <FeedProvider>
           <LapSyncProvider>{children}</LapSyncProvider>
