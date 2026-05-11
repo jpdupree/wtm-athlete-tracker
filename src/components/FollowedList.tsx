@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, type FollowedAthlete } from "@/lib/db";
 import { useOverallFeed } from "@/components/FeedProvider";
@@ -8,18 +9,47 @@ import { predict } from "@/lib/predict";
 import { LAP_MILES } from "@/lib/race";
 import type { Athlete } from "@/lib/types";
 
+type SortKey = "added" | "rank" | "margin";
+const SORT_STORAGE = "wtm-followed-sort-v1";
+
+const SORTS: Array<{ key: SortKey; label: string; hint: string }> = [
+  { key: "added", label: "Added", hint: "in the order you added them" },
+  { key: "rank", label: "Rank", hint: "by current overall rank" },
+  { key: "margin", label: "Behind", hint: "most behind goal first" },
+];
+
 export function FollowedList() {
-  const followed = useLiveQuery(
+  const rawFollowed = useLiveQuery(
     () => db.followed.orderBy("addedAt").toArray(),
     [],
   );
   const { data } = useOverallFeed();
 
-  if (followed === undefined) {
+  const [sortKey, setSortKey] = useState<SortKey>("added");
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(SORT_STORAGE);
+      if (stored === "rank" || stored === "margin" || stored === "added") {
+        setSortKey(stored);
+      }
+    } catch {
+      /* private mode */
+    }
+  }, []);
+  const pickSort = (k: SortKey) => {
+    setSortKey(k);
+    try {
+      window.localStorage.setItem(SORT_STORAGE, k);
+    } catch {
+      /* */
+    }
+  };
+
+  if (rawFollowed === undefined) {
     return <p className="text-sm opacity-50">Loading…</p>;
   }
 
-  if (followed.length === 0) {
+  if (rawFollowed.length === 0) {
     return (
       <section className="rounded-lg border border-current/20 p-6 text-center space-y-3">
         <p className="text-sm">No athletes followed yet.</p>
@@ -33,8 +63,65 @@ export function FollowedList() {
     );
   }
 
+  const followed = [...rawFollowed].sort((a, b) => {
+    const aRow = data?.rows.find((r) => r.bib === a.bib) ?? null;
+    const bRow = data?.rows.find((r) => r.bib === b.bib) ?? null;
+    if (sortKey === "rank") {
+      // Athletes without a row sink to the bottom; otherwise lower rank
+      // number (= better placement) comes first.
+      const ar = aRow && aRow.overallRank > 0 ? aRow.overallRank : Infinity;
+      const br = bRow && bRow.overallRank > 0 ? bRow.overallRank : Infinity;
+      return ar - br;
+    }
+    if (sortKey === "margin") {
+      // "Most behind goal first" — biggest negative margin first. Athletes
+      // already at/past goal (positive margin) go after; no-goal athletes
+      // sink to bottom.
+      const am = marginMs(a, aRow);
+      const bm = marginMs(b, bRow);
+      if (am === null && bm === null) return 0;
+      if (am === null) return 1;
+      if (bm === null) return -1;
+      return am - bm; // smaller (more negative) first
+    }
+    // "added" — keep the underlying addedAt order
+    return 0;
+  });
+
   return (
     <section className="space-y-3">
+      <div className="flex items-center gap-1 px-1">
+        <span className="text-[10px] uppercase tracking-[0.18em] opacity-50">
+          Sort
+        </span>
+        {SORTS.map((s) => {
+          const active = s.key === sortKey;
+          return (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => pickSort(s.key)}
+              title={s.hint}
+              aria-pressed={active}
+              className="rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider transition-colors"
+              style={
+                active
+                  ? {
+                      border: "1px solid var(--wtm-accent)",
+                      color: "var(--wtm-accent)",
+                      background: "var(--wtm-accent-dim)",
+                    }
+                  : {
+                      border: "1px solid var(--wtm-border)",
+                      opacity: 0.7,
+                    }
+              }
+            >
+              {s.label}
+            </button>
+          );
+        })}
+      </div>
       <ul className="divide-y divide-current/10 rounded-lg border border-current/20">
         {followed.map((a) => (
           <Row key={a.bib} athlete={a} apiRow={data?.rows.find((r) => r.bib === a.bib) ?? null} />
@@ -48,6 +135,19 @@ export function FollowedList() {
       </Link>
     </section>
   );
+}
+
+// Margin-to-race-end in ms, or null when there's no goal or no data.
+function marginMs(a: FollowedAthlete, row: Athlete | null): number | null {
+  if (a.goalMiles == null) return null;
+  if (!row || row.laps <= 0) return null;
+  if (row.laps * LAP_MILES >= a.goalMiles) return Number.POSITIVE_INFINITY;
+  const p = predict({
+    totalSec: row.totalSec ?? 0,
+    laps: row.laps,
+    goalMiles: a.goalMiles,
+  });
+  return p?.marginMs ?? null;
 }
 
 function Row({ athlete, apiRow }: { athlete: FollowedAthlete; apiRow: Athlete | null }) {
