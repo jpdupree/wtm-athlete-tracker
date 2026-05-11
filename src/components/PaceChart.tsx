@@ -285,40 +285,43 @@ export function PaceChart({
           strokeWidth="1"
           opacity="0.3"
         />
-        <text
-          x={sx(windowSec) - 2}
-          y={sy(goalMiles) + 10}
-          textAnchor="end"
-          fontSize="8"
-          fill="currentColor"
-          opacity="0.55"
-        >
-          goal-by-end pace
-        </text>
 
         {cutoffPaceY > 0 && (
-          <>
-            <line
-              x1={sx(0)}
-              y1={sy(0)}
-              x2={sx(cutoffSec)}
-              y2={sy(cutoffPaceY)}
-              stroke="currentColor"
-              strokeWidth="1"
-              opacity="0.3"
-            />
+          <line
+            x1={sx(0)}
+            y1={sy(0)}
+            x2={sx(cutoffSec)}
+            y2={sy(cutoffPaceY)}
+            stroke="currentColor"
+            strokeWidth="1"
+            opacity="0.3"
+          />
+        )}
+
+        {/* Stacked labels for the two reference diagonals, anchored to the
+            top-right so they never collide with each other when the goal
+            and cutoff-pace lines converge. */}
+        <g transform={`translate(${W - PAD_R - 2}, ${PAD_T + 9})`}>
+          <text
+            textAnchor="end"
+            fontSize="8"
+            fill="currentColor"
+            opacity="0.6"
+          >
+            goal-by-end pace
+          </text>
+          {cutoffPaceY > 0 && (
             <text
-              x={sx(cutoffSec) - 2}
-              y={sy(cutoffPaceY) - 3}
+              y={10}
               textAnchor="end"
               fontSize="8"
               fill="currentColor"
-              opacity="0.55"
+              opacity="0.6"
             >
               start-final-lap pace
             </text>
-          </>
-        )}
+          )}
+        </g>
 
         {/* Cutoff vertical at 24h */}
         <line
