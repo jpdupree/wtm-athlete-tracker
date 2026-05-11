@@ -5,6 +5,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db, type FuelEntry, type Note } from "@/lib/db";
 import { lapId, markLapManual } from "@/lib/lapSync";
 import { fmtSec, fmtVenueClock } from "@/lib/format";
+import { paceStatus, type PaceStatus } from "@/lib/predict";
 import { RACE_START } from "@/lib/race";
 
 type Target = "lap" | "pit";
@@ -51,6 +52,42 @@ export function LapCard({
   const deltaSec =
     durationSec != null && prevDurationSec != null ? durationSec - prevDurationSec : null;
 
+  // Goal-aware pace status for this lap end, so the +/- next to the lap time
+  // matches the pace-chart segment color: a slower-than-prior lap still goes
+  // green if the projected finish is comfortably hitting the goal.
+  const followed = useLiveQuery(() => db.followed.get(bib), [bib]);
+  const lapsUpToHere = useLiveQuery(
+    async () => {
+      const all = await db.laps.where("bib").equals(bib).toArray();
+      return all
+        .filter((l) => l.lapNumber <= lapNumber && !!l.lapCompletedAt)
+        .sort((a, b) => a.lapNumber - b.lapNumber);
+    },
+    [bib, lapNumber],
+  );
+  const lapDurations: number[] = [];
+  {
+    let prevEndMs = RACE_START.getTime();
+    for (const l of lapsUpToHere ?? []) {
+      if (!l.lapCompletedAt) continue;
+      const endMs = new Date(l.lapCompletedAt).getTime();
+      lapDurations.push((endMs - prevEndMs) / 1000);
+      prevEndMs = endMs;
+    }
+  }
+  const totalSecAtLapEnd = completedAt
+    ? (new Date(completedAt).getTime() - RACE_START.getTime()) / 1000
+    : null;
+  const goalStatus: PaceStatus | null =
+    totalSecAtLapEnd != null && followed?.goalMiles != null
+      ? paceStatus({
+          totalSec: totalSecAtLapEnd,
+          laps: lapNumber,
+          goalMiles: followed.goalMiles,
+          lapSecs: lapDurations,
+        })
+      : null;
+
   const source = lap?.source;
   const provisional = lap?.provisional;
 
@@ -71,7 +108,11 @@ export function LapCard({
               {fmtVenueClock(completedAt)}
               {durationSec != null && ` · ${fmtSec(durationSec)}`}
               {deltaSec != null && (
-                <span className={`ml-1 ${deltaColor(deltaSec)}`}>
+                <span
+                  className={`ml-1 ${
+                    goalStatus ? statusColor(goalStatus) : deltaColor(deltaSec)
+                  }`}
+                >
                   ({deltaPrefix(deltaSec)}
                   {fmtSec(Math.abs(deltaSec))})
                 </span>
@@ -127,6 +168,12 @@ export function LapCard({
 
 function deltaPrefix(sec: number): string {
   return sec > 0 ? "+" : sec < 0 ? "−" : "±";
+}
+
+function statusColor(s: PaceStatus): string {
+  if (s === "green") return "text-green-500";
+  if (s === "amber") return "text-amber-500";
+  return "text-red-500";
 }
 
 function deltaColor(sec: number): string {
