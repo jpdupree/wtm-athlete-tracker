@@ -7,7 +7,7 @@
 // Bump CACHE when the SHELL list or the caching strategy changes — the
 // activate handler deletes any older caches so the new shell wins.
 
-const CACHE = "wtm-v3";
+const CACHE = "wtm-v4";
 const SHELL = [
   "/",
   "/add",
