@@ -298,30 +298,19 @@ export function PaceChart({
           />
         )}
 
-        {/* Stacked labels for the two reference diagonals, anchored to the
-            top-right so they never collide with each other when the goal
-            and cutoff-pace lines converge. */}
-        <g transform={`translate(${W - PAD_R - 2}, ${PAD_T + 9})`}>
-          <text
-            textAnchor="end"
-            fontSize="8"
-            fill="currentColor"
-            opacity="0.6"
-          >
-            goal-by-end pace
-          </text>
-          {cutoffPaceY > 0 && (
-            <text
-              y={10}
-              textAnchor="end"
-              fontSize="8"
-              fill="currentColor"
-              opacity="0.6"
-            >
-              start-final-lap pace
-            </text>
-          )}
-        </g>
+        {/* One combined label for both reference diagonals (race-end pace
+            and cutoff-start pace). Lives top-left so it doesn't fight the
+            goal-miles label sitting at the top-right of the chart. */}
+        <text
+          x={PAD_L + 2}
+          y={PAD_T + 9}
+          textAnchor="start"
+          fontSize="8"
+          fill="currentColor"
+          opacity="0.6"
+        >
+          required pace
+        </text>
 
         {/* Cutoff vertical at 24h */}
         <line
@@ -444,6 +433,9 @@ export function PaceChart({
       <p className="px-2 pt-1 text-[11px] opacity-60 leading-snug">
         Solid segments: laps. Dashed segments: pit stops. Color reflects
         whether the projected finish is hitting the goal at that point.
+        Thin diagonals show the minimum pace to hit the goal — the upper
+        line is finishing exactly at race end, the lower line is starting
+        the final lap by cutoff.
       </p>
     </div>
   );
