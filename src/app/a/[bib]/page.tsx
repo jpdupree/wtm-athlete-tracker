@@ -15,6 +15,7 @@ import { IntakeTargetsEditor } from "@/components/IntakeTargetsEditor";
 import { StatsGrid } from "@/components/StatsGrid";
 import { LapStrip } from "@/components/LapStrip";
 import { LapCard } from "@/components/LapCard";
+import { PrintButton } from "@/components/PrintButton";
 
 export default function AthleteDetailPage({
   params,
@@ -51,12 +52,15 @@ export default function AthleteDetailPage({
 
   return (
     <main className="mx-auto max-w-md px-4 py-6 space-y-4">
-      <Link
-        href="/"
-        className="inline-flex items-center gap-1 text-xs uppercase tracking-wider opacity-60 hover:opacity-100"
-      >
-        <span style={{ color: "var(--wtm-accent)" }}>←</span> Home
-      </Link>
+      <div className="flex items-center justify-between gap-2">
+        <Link
+          href="/"
+          className="print-hide inline-flex items-center gap-1 text-xs uppercase tracking-wider opacity-60 hover:opacity-100"
+        >
+          <span style={{ color: "var(--wtm-accent)" }}>←</span> Home
+        </Link>
+        <PrintButton />
+      </div>
 
       <header
         className="rounded-lg px-4 py-4 space-y-2"

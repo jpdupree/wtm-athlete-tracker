@@ -79,3 +79,34 @@ body::before {
    right too. */
 [data-theme="light"] .wtm-logo-dark { display: none; }
 html:not([data-theme="light"]) .wtm-logo-light { display: none; }
+
+/* Print: force a clean light layout so race-day handoffs don't waste
+   ink on the dark theme, hide nav/toggle/button chrome via .print-hide,
+   and expand every <details> (LapCards) so a printed page shows the
+   full lap-by-lap history. */
+@media print {
+  html, body {
+    background: white !important;
+    color: black !important;
+  }
+  body::before { display: none !important; }
+
+  .print-hide { display: none !important; }
+
+  /* Force-open all <details> by showing every child regardless of the
+     element's `open` attribute. */
+  details > *:not(summary) {
+    display: block !important;
+  }
+  details > summary {
+    list-style: none;
+    cursor: default;
+  }
+  details > summary::-webkit-details-marker { display: none; }
+
+  /* Keep cards together on a page when possible. */
+  details, header, section, footer { break-inside: avoid; }
+
+  /* SVGs (pace chart) print as black-ink line art by default. */
+  svg { color: black; }
+}
