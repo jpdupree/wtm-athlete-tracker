@@ -88,12 +88,78 @@ export function LapCard({
         <Section title={`Lap ${lapNumber} notes`} bib={bib} lapNumber={lapNumber} target="lap" kind="note" />
         {!inProgress && (
           <>
+            <PitTimer bib={bib} lapNumber={lapNumber} />
             <Section title={`Pit ${lapNumber} fuel`} bib={bib} lapNumber={lapNumber} target="pit" kind="fuel" />
             <Section title={`Pit ${lapNumber} notes`} bib={bib} lapNumber={lapNumber} target="pit" kind="note" />
           </>
         )}
       </div>
     </details>
+  );
+}
+
+function PitTimer({ bib, lapNumber }: { bib: number; lapNumber: number }) {
+  const lap = useLiveQuery(() => db.laps.get(lapId(bib, lapNumber)), [bib, lapNumber]);
+  const start = lap?.pitStartedAt;
+  const end = lap?.pitCompletedAt;
+  const durationSec =
+    start && end
+      ? Math.round((new Date(end).getTime() - new Date(start).getTime()) / 1000)
+      : null;
+  return (
+    <div className="px-4 py-3 space-y-2">
+      <p className="text-xs uppercase tracking-wide opacity-60">Pit {lapNumber} timing</p>
+      <div className="flex items-center gap-2 text-sm">
+        {start && (
+          <span className="tabular-nums opacity-80">
+            in {fmtVenueClock(start)}
+          </span>
+        )}
+        {end && (
+          <span className="tabular-nums opacity-80">
+            out {fmtVenueClock(end)}
+            {durationSec != null && ` · ${fmtSec(durationSec)}`}
+          </span>
+        )}
+        {!start && !end && <span className="opacity-50">Not recorded.</span>}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() =>
+            db.laps.update(lapId(bib, lapNumber), {
+              pitStartedAt: new Date().toISOString(),
+            })
+          }
+          className="rounded-md border border-current/30 px-3 py-1 text-xs"
+        >
+          {start ? "Reset in" : "Mark into pit"}
+        </button>
+        <button
+          disabled={!start}
+          onClick={() =>
+            db.laps.update(lapId(bib, lapNumber), {
+              pitCompletedAt: new Date().toISOString(),
+            })
+          }
+          className="rounded-md border border-current/30 px-3 py-1 text-xs disabled:opacity-40"
+        >
+          {end ? "Reset out" : "Mark out of pit"}
+        </button>
+        {(start || end) && (
+          <button
+            onClick={() =>
+              db.laps.update(lapId(bib, lapNumber), {
+                pitStartedAt: null,
+                pitCompletedAt: null,
+              })
+            }
+            className="rounded-md px-3 py-1 text-xs opacity-60"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 
