@@ -90,17 +90,25 @@ export function PaceChart({
     const thisLapDur = lapEndSec - prevEndSecForDur;
     const throughThis = [...priorDurs, thisLapDur];
 
-    // The first few laps don't carry enough signal to confidently call a
-    // segment off-pace — leave them neutral (gray) so we don't shout red
-    // at someone who's just settling into a routine.
-    const MIN_LAPS_FOR_COLOR = 4;
-    const statusAtLapEnd =
-      n >= MIN_LAPS_FOR_COLOR
-        ? paceStatus({ totalSec: lapEndSec, laps: n, goalMiles, lapSecs: throughThis })
-        : null;
+    // Color every segment. Early laps look fast because obstacles aren't
+    // open yet for the first ~6h; the fade table (calibrated from the
+    // finisher cohort) already weights those transitions, so an early-race
+    // lap-2 pace that *looks* on track for 20 laps gets correctly bumped
+    // toward red once obstacles factor in.
+    const statusAtLapEnd = paceStatus({
+      totalSec: lapEndSec,
+      laps: n,
+      goalMiles,
+      lapSecs: throughThis,
+    });
     const statusAtPitEnd =
-      n - 1 >= MIN_LAPS_FOR_COLOR
-        ? paceStatus({ totalSec: lapEndSec, laps: n - 1, goalMiles, lapSecs: priorDurs })
+      n > 1
+        ? paceStatus({
+            totalSec: lapEndSec,
+            laps: n - 1,
+            goalMiles,
+            lapSecs: priorDurs,
+          })
         : null;
 
     const hasPit = lap.pitStartedAt && lap.pitCompletedAt;
