@@ -1,5 +1,5 @@
 import { db, type Lap } from "./db";
-import type { Athlete } from "./types";
+import type { Athlete, Passing } from "./types";
 
 export const lapId = (bib: number, lapNumber: number): string =>
   `${bib}:${lapNumber}`;
@@ -22,6 +22,38 @@ export async function syncBibLaps(row: Athlete): Promise<void> {
       lapNumber: n,
       lapStartedAt: prior?.lapStartedAt ?? null,
       lapCompletedAt: n === row.laps ? ts : (prior?.lapCompletedAt ?? null),
+      pitStartedAt: prior?.pitStartedAt ?? null,
+      pitCompletedAt: prior?.pitCompletedAt ?? null,
+      source: "api",
+      provisional: false,
+    };
+    await db.laps.put(next);
+  }
+}
+
+// Full per-lap history from the passings feed. Unlike syncBibLaps which only
+// stamps the latest lap, this stamps every lap that has a passing — fixing
+// cold-load gaps for older laps.
+export async function syncBibLapsFromPassings(
+  bib: number,
+  passings: Passing[],
+): Promise<void> {
+  for (const p of passings) {
+    const id = lapId(bib, p.lapNumber);
+    const prior = await db.laps.get(id);
+    if (
+      prior?.source === "api" &&
+      !prior.provisional &&
+      prior.lapCompletedAt === p.completedAt
+    ) {
+      continue;
+    }
+    const next: Lap = {
+      id,
+      bib,
+      lapNumber: p.lapNumber,
+      lapStartedAt: prior?.lapStartedAt ?? null,
+      lapCompletedAt: p.completedAt,
       pitStartedAt: prior?.pitStartedAt ?? null,
       pitCompletedAt: prior?.pitCompletedAt ?? null,
       source: "api",
