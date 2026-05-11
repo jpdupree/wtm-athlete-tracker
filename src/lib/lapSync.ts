@@ -39,9 +39,21 @@ export async function syncBibLapsFromPassings(
   bib: number,
   passings: Passing[],
 ): Promise<void> {
-  for (const p of passings) {
-    const id = lapId(bib, p.lapNumber);
-    const prior = await db.laps.get(id);
+  if (passings.length === 0) return;
+
+  // Read all priors in ONE bulk call, then accumulate the writes that
+  // actually differ and flush in ONE bulkPut. Previous per-lap get/put
+  // pairs created N*2 IndexedDB transactions per athlete, which compounded
+  // across followed athletes was enough to starve other writes (e.g.
+  // saving a goal would hang behind a passings sync on slower devices).
+  const ids = passings.map((p) => lapId(bib, p.lapNumber));
+  const priors = await db.laps.bulkGet(ids);
+  const writes: Lap[] = [];
+
+  for (let i = 0; i < passings.length; i++) {
+    const p = passings[i];
+    const id = ids[i];
+    const prior = priors[i];
 
     // Compute window timestamps from durations when we have them.
     // For lap N: completedAt is the end; lapStartedAt = completedAt - lapSec;
@@ -74,7 +86,7 @@ export async function syncBibLapsFromPassings(
       continue;
     }
 
-    const next: Lap = {
+    writes.push({
       id,
       bib,
       lapNumber: p.lapNumber,
@@ -84,8 +96,11 @@ export async function syncBibLapsFromPassings(
       pitCompletedAt,
       source: "api",
       provisional: false,
-    };
-    await db.laps.put(next);
+    });
+  }
+
+  if (writes.length > 0) {
+    await db.laps.bulkPut(writes);
   }
 }
 

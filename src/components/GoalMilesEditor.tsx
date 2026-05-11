@@ -96,11 +96,17 @@ export function GoalMilesEditor({
         e.preventDefault();
         const miles = milesDraft.trim() ? parseInt(milesDraft, 10) : null;
         const pit = pitDraft.trim() ? parsePitInput(pitDraft) : null;
-        await db.followed.update(bib, {
-          goalMiles: miles != null && Number.isFinite(miles) ? miles : null,
-          goalPitSec: pit,
-        });
-        setEditing(false);
+        // Always close the form; if the write fails (e.g. IDB blocked
+        // mid-poll), we still want the user out of the editing state and
+        // can surface the error elsewhere rather than leaving them stuck.
+        try {
+          await db.followed.update(bib, {
+            goalMiles: miles != null && Number.isFinite(miles) ? miles : null,
+            goalPitSec: pit,
+          });
+        } finally {
+          setEditing(false);
+        }
       }}
       className="rounded-lg border border-current/40 px-4 py-3 space-y-3"
     >
