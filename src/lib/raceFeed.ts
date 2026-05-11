@@ -1,5 +1,4 @@
-import { promises as fs } from "node:fs";
-import path from "node:path";
+import { getAthletesBySlice } from "./fixtures";
 import { kvGet, kvSet } from "./kv";
 import { RACE_START } from "./race";
 import type { Athlete, FeedResponse, RawAthleteRow, Slice } from "./types";
@@ -70,16 +69,17 @@ function normalizeRow(r: RawAthleteRow, gender: "M" | "F" | null): Athlete {
   };
 }
 
-async function fetchRaw(slice: Slice): Promise<RawAthleteRow[]> {
+async function fetchSlice(slice: Slice): Promise<Athlete[]> {
   const url = process.env[ENV_BY_SLICE[slice]];
   if (url) {
     const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) throw new Error(`upstream ${slice}: ${res.status}`);
-    return (await res.json()) as RawAthleteRow[];
+    const raw = (await res.json()) as RawAthleteRow[];
+    return raw.map((r) => normalizeRow(r, GENDER_BY_SLICE[slice]));
   }
-  const file = path.join(process.cwd(), "mocks", "raceresult-348237.json");
-  const buf = await fs.readFile(file, "utf8");
-  return JSON.parse(buf) as RawAthleteRow[];
+  // Fixture path: CSVs already pre-split by gender, with team chips on the
+  // teams slice. getAthletesBySlice returns Athlete[] directly.
+  return getAthletesBySlice(slice);
 }
 
 type CachePayload = { fetchedAt: string; rows: Athlete[] };
@@ -94,8 +94,7 @@ export async function getFeed(slice: Slice): Promise<FeedResponse> {
       return { slice, fetchedAt: cached.fetchedAt, cached: true, ageMs, rows: cached.rows };
     }
   }
-  const raw = await fetchRaw(slice);
-  const rows = raw.map((r) => normalizeRow(r, GENDER_BY_SLICE[slice]));
+  const rows = await fetchSlice(slice);
   const fetchedAt = new Date(now).toISOString();
   await kvSet<CachePayload>(cacheKey, { fetchedAt, rows });
   return { slice, fetchedAt, cached: false, ageMs: 0, rows };

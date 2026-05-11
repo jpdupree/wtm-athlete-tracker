@@ -1,8 +1,7 @@
-import { promises as fs } from "node:fs";
-import path from "node:path";
+import { getAllPassings } from "./fixtures";
 import { kvGet, kvSet } from "./kv";
 import { RACE_START } from "./race";
-import type { Passing, RawAthleteRow, RawPassing } from "./types";
+import type { Passing, RawPassing } from "./types";
 
 const FRESH_MS = 15_000;
 
@@ -56,49 +55,21 @@ function normalizePassing(r: RawPassing): Passing | null {
   };
 }
 
-// When RACE_FEED_PASSINGS is unset, synthesize a plausible passings list
-// from the existing overall mock so the chart and lap history have something
-// to render in dev. Latest lap aligns with LastSeenTOD; earlier laps are
-// evenly distributed across totalSec.
-async function synthAllPassings(): Promise<Passing[]> {
-  const file = path.join(process.cwd(), "mocks", "raceresult-348237.json");
-  const buf = await fs.readFile(file, "utf8");
-  const raw = JSON.parse(buf) as RawAthleteRow[];
-  const out: Passing[] = [];
-  for (const r of raw) {
-    const laps = parseInt(r.Laps, 10) || 0;
-    if (laps <= 0) continue;
-    const totalSec = parseHmsToSec(r.TotalTime) ?? 0;
-    if (totalSec <= 0) continue;
-    const bib = r.Bib;
-    for (let n = 1; n <= laps; n++) {
-      const elapsedSec = (totalSec * n) / laps;
-      out.push({
-        bib,
-        lapNumber: n,
-        elapsedSec,
-        completedAt: new Date(RACE_START.getTime() + elapsedSec * 1000).toISOString(),
-      });
-    }
-  }
-  return out;
-}
-
-async function fetchAllPassings(): Promise<{ passings: Passing[]; synthetic: boolean }> {
+async function fetchAllPassings(): Promise<Passing[]> {
   const url = process.env.RACE_FEED_PASSINGS;
   if (url) {
     const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) throw new Error(`passings upstream: ${res.status}`);
     const rows = (await res.json()) as RawPassing[];
-    const passings = rows
+    return rows
       .map(normalizePassing)
       .filter((p): p is Passing => p !== null);
-    return { passings, synthetic: false };
   }
-  return { passings: await synthAllPassings(), synthetic: true };
+  // Real per-lap data from test/fixtures/lap_details_{individual,team}.csv.
+  return getAllPassings();
 }
 
-type CachePayload = { fetchedAt: string; passings: Passing[]; synthetic: boolean };
+type CachePayload = { fetchedAt: string; passings: Passing[] };
 
 export async function getPassingsForBib(bib: number): Promise<{
   fetchedAt: string;
@@ -121,12 +92,8 @@ export async function getPassingsForBib(bib: number): Promise<{
     }
   }
   if (!payload) {
-    const { passings, synthetic } = await fetchAllPassings();
-    payload = {
-      fetchedAt: new Date(now).toISOString(),
-      passings,
-      synthetic,
-    };
+    const passings = await fetchAllPassings();
+    payload = { fetchedAt: new Date(now).toISOString(), passings };
     await kvSet<CachePayload>(cacheKey, payload);
     ageMs = 0;
   }
@@ -137,7 +104,9 @@ export async function getPassingsForBib(bib: number): Promise<{
     fetchedAt: payload.fetchedAt,
     cached,
     ageMs,
-    synthetic: payload.synthetic,
+    // The CSV fixtures and the upstream URL both deliver real per-lap data,
+    // so we no longer synthesize. Field kept for response-shape stability.
+    synthetic: false,
     passings: forBib,
   };
 }
