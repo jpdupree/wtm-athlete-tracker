@@ -4,6 +4,37 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { LAP_MILES, RACE_END, RACE_START } from "@/lib/race";
 
+const STORAGE_KEY = "wtm-pace-calc-v1";
+
+type StoredPlan = {
+  miles?: string;
+  lap?: string;
+  pit?: string;
+  lapOverrides?: Record<number, string>;
+  pitOverrides?: Record<number, string>;
+};
+
+function loadStored(): StoredPlan {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object") return {};
+    return parsed as StoredPlan;
+  } catch {
+    return {};
+  }
+}
+
+function saveStored(plan: StoredPlan) {
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(plan));
+  } catch {
+    /* quota / private mode — silently drop */
+  }
+}
+
 // Ratio of pit time to lap (running) time used for the auto fill. Roughly
 // matches what 2025 finishers' median totals worked out to once you back out
 // the race window — pits are a small fraction of each cycle, not half.
@@ -49,6 +80,10 @@ function fmtHm(sec: number): string {
 }
 
 export default function PaceCalculatorPage() {
+  // Initialize from localStorage if present so a calculator session
+  // survives reloads. SSR returns empty {} so the first paint matches the
+  // default; useEffect below hydrates after mount.
+  const [hydrated, setHydrated] = useState(false);
   const [milesStr, setMilesStr] = useState("100");
   const goalMiles = useMemo(() => {
     const n = parseInt(milesStr, 10);
@@ -66,6 +101,24 @@ export default function PaceCalculatorPage() {
   const [lapStr, setLapStr] = useState(() => fmtHm(autoLapPit(20).lap));
   const [pitStr, setPitStr] = useState(() => fmtHm(autoLapPit(20).pit));
 
+  // Hydrate from localStorage once on the client.
+  useEffect(() => {
+    const stored = loadStored();
+    if (stored.miles) setMilesStr(stored.miles);
+    if (stored.lap) {
+      setLapStr(stored.lap);
+      setLapDirty(true);
+    }
+    if (stored.pit) {
+      setPitStr(stored.pit);
+      setPitDirty(true);
+    }
+    if (stored.lapOverrides) setLapOverrides(stored.lapOverrides);
+    if (stored.pitOverrides) setPitOverrides(stored.pitOverrides);
+    setHydrated(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (!lapDirty) setLapStr(fmtHm(auto.lap));
     if (!pitDirty) setPitStr(fmtHm(auto.pit));
@@ -79,6 +132,18 @@ export default function PaceCalculatorPage() {
   // partial typing is allowed; empty string = "use the global value".
   const [lapOverrides, setLapOverrides] = useState<Record<number, string>>({});
   const [pitOverrides, setPitOverrides] = useState<Record<number, string>>({});
+
+  // Persist any change once we've finished the initial hydration.
+  useEffect(() => {
+    if (!hydrated) return;
+    saveStored({
+      miles: milesStr,
+      lap: lapDirty ? lapStr : undefined,
+      pit: pitDirty ? pitStr : undefined,
+      lapOverrides,
+      pitOverrides,
+    });
+  }, [hydrated, milesStr, lapStr, pitStr, lapDirty, pitDirty, lapOverrides, pitOverrides]);
 
   const numPits = Math.max(0, goalLaps - 1);
 
