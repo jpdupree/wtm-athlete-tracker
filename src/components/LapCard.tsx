@@ -141,7 +141,7 @@ export function LapCard({
 
       <div className="border-t border-current/10 divide-y divide-current/10">
         {!completedAt && inProgress && (
-          <div className="px-4 py-3">
+          <div className="px-4 py-3 print-hide">
             <button
               onClick={() => markLapManual(bib, lapNumber)}
               className="rounded-md border border-current/40 px-3 py-1 text-xs font-medium"
@@ -217,7 +217,7 @@ function PitTimer({ bib, lapNumber }: { bib: number; lapNumber: number }) {
         )}
         {!start && !end && <span className="opacity-50">Not recorded.</span>}
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2 print-hide">
         <button
           onClick={() =>
             db.laps.update(lapId(bib, lapNumber), {
@@ -295,12 +295,16 @@ function Section({
       {kind === "fuel" ? (
         <>
           <FuelEntries bib={bib} lapNumber={lapNumber} target={target} />
-          <AddFuel bib={bib} lapNumber={lapNumber} target={target} />
+          <div className="print-hide">
+            <AddFuel bib={bib} lapNumber={lapNumber} target={target} />
+          </div>
         </>
       ) : (
         <>
           <NoteEntries bib={bib} lapNumber={lapNumber} target={target} />
-          <AddNote bib={bib} lapNumber={lapNumber} target={target} />
+          <div className="print-hide">
+            <AddNote bib={bib} lapNumber={lapNumber} target={target} />
+          </div>
         </>
       )}
     </div>
@@ -337,7 +341,7 @@ function FuelEntries({ bib, lapNumber, target }: { bib: number; lapNumber: numbe
           <button
             onClick={() => db.fuel.delete(e.id)}
             aria-label="Remove fuel entry"
-            className="ml-2 text-xs opacity-50 hover:opacity-100"
+            className="ml-2 text-xs opacity-50 hover:opacity-100 print-hide"
           >
             ×
           </button>
@@ -366,7 +370,7 @@ function NoteEntries({ bib, lapNumber, target }: { bib: number; lapNumber: numbe
           <button
             onClick={() => db.notes.delete(n.id)}
             aria-label="Remove note"
-            className="ml-2 text-xs opacity-50 hover:opacity-100"
+            className="ml-2 text-xs opacity-50 hover:opacity-100 print-hide"
           >
             ×
           </button>

@@ -81,9 +81,8 @@ body::before {
 html:not([data-theme="light"]) .wtm-logo-light { display: none; }
 
 /* Print: force a clean light layout so race-day handoffs don't waste
-   ink on the dark theme, hide nav/toggle/button chrome via .print-hide,
-   and expand every <details> (LapCards) so a printed page shows the
-   full lap-by-lap history. */
+   ink on the dark theme, give the page a usable width on Letter/A4
+   paper, hide UI chrome, and expand collapsed LapCards. */
 @media print {
   html, body {
     background: white !important;
@@ -91,10 +90,19 @@ html:not([data-theme="light"]) .wtm-logo-light { display: none; }
   }
   body::before { display: none !important; }
 
+  /* Wider content area for paper — the on-screen max-w-md (~4.7") is
+     way too narrow for printing. ~6.5" fills a Letter page minus the
+     standard 1" margins. */
+  main {
+    max-width: 6.5in !important;
+    margin: 0 auto !important;
+    padding: 0.25in 0 !important;
+  }
+
   .print-hide { display: none !important; }
 
-  /* Force-open all <details> by showing every child regardless of the
-     element's `open` attribute. */
+  /* Force-open all <details> via CSS as well as JS — JS handles the
+     primary work; this is a fallback for any I missed. */
   details > *:not(summary) {
     display: block !important;
   }
@@ -104,9 +112,24 @@ html:not([data-theme="light"]) .wtm-logo-light { display: none; }
   }
   details > summary::-webkit-details-marker { display: none; }
 
-  /* Keep cards together on a page when possible. */
-  details, header, section, footer { break-inside: avoid; }
+  /* Display-mode "buttons" (GoalEditor, IntakeTargetsEditor) are
+     <button> elements wrapping data. Strip the interactive look so
+     they read as cards in print rather than UI controls — keep the
+     border so the section is still visually grouped. */
+  main button {
+    cursor: default !important;
+    box-shadow: none !important;
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Keep sections together on a page when possible. */
+  details, header, section, footer, form { break-inside: avoid; }
 
   /* SVGs (pace chart) print as black-ink line art by default. */
   svg { color: black; }
+
+  /* Two-up grids that look too wide on paper — the StatsGrid is fine
+     wider, so this is just a fallback for the IntakeBars/etc. */
+  .grid { gap: 0.25rem !important; }
 }

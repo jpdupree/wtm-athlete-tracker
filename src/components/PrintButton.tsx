@@ -1,14 +1,34 @@
 "use client";
 
-// Invokes the browser print dialog for the current page. The print
-// stylesheet in globals.css forces a clean light layout, expands all
-// collapsed lap cards, and hides chrome marked .print-hide. The button
-// itself also carries .print-hide so it doesn't show up on paper.
+// Invokes the browser print dialog. Before printing we force every
+// <details> on the page open (CSS alone can't reliably override the
+// element's collapse), then restore the previous open/closed state via
+// the `afterprint` event so the on-screen UX is unchanged.
+function handlePrint() {
+  const detailsList = Array.from(
+    document.querySelectorAll<HTMLDetailsElement>("details"),
+  );
+  const wasOpen = detailsList.map((d) => d.open);
+  detailsList.forEach((d) => {
+    d.open = true;
+  });
+
+  const restore = () => {
+    detailsList.forEach((d, i) => {
+      d.open = wasOpen[i];
+    });
+    window.removeEventListener("afterprint", restore);
+  };
+  window.addEventListener("afterprint", restore);
+
+  window.print();
+}
+
 export function PrintButton() {
   return (
     <button
       type="button"
-      onClick={() => window.print()}
+      onClick={handlePrint}
       aria-label="Print this athlete's race card"
       className="print-hide inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs uppercase tracking-wider font-semibold transition-colors"
       style={{
