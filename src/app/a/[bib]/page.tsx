@@ -79,6 +79,7 @@ export default function AthleteDetailPage({
       />
 
       <FinishPrediction
+        bib={bib}
         totalSec={row?.totalSec ?? 0}
         laps={row?.laps ?? 0}
         goalMiles={followed.goalMiles}

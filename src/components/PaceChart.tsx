@@ -67,8 +67,15 @@ export function PaceChart({
   const lapMarkers: Array<{ x: number; y: number }> = [];
 
   const validLaps = (lapRows ?? []).filter((l): l is Lap => !!l.lapCompletedAt);
+
+  // Wall-clock duration of each completed lap (pit + running). Used for the
+  // trailing-pace prediction so a fading athlete's projection slows down with
+  // them, instead of being anchored to their fresh-legs early-lap average.
+  const lapDurations: number[] = [];
+
   let lastLapEndSec = 0;
   let lastLapEndMiles = 0;
+  let prevEndSecForDur = 0;
   for (const lap of validLaps) {
     const n = lap.lapNumber;
     const lapEndSec = secFromStart(lap.lapCompletedAt!);
@@ -76,6 +83,12 @@ export function PaceChart({
 
     const lapEndY = n * LAP_MILES;
     const prevY = (n - 1) * LAP_MILES;
+
+    // Trailing pace at the END of pit (before lap N starts) sees only laps
+    // strictly before this one; at the END of lap N it includes this lap.
+    const priorDurs = lapDurations.slice();
+    const thisLapDur = lapEndSec - prevEndSecForDur;
+    const throughThis = [...priorDurs, thisLapDur];
 
     const hasPit = lap.pitStartedAt && lap.pitCompletedAt;
     const hasLapStart = !!lap.lapStartedAt;
@@ -91,7 +104,15 @@ export function PaceChart({
         y1: prevY,
         x2: pitEndSec,
         y2: prevY,
-        status: n > 1 ? paceStatus({ totalSec: pitEndSec, laps: n - 1, goalMiles }) : null,
+        status:
+          n > 1
+            ? paceStatus({
+                totalSec: pitEndSec,
+                laps: n - 1,
+                goalMiles,
+                lapSecs: priorDurs,
+              })
+            : null,
       });
       // Lap segment (diagonal).
       segments.push({
@@ -100,7 +121,12 @@ export function PaceChart({
         y1: prevY,
         x2: lapEndSec,
         y2: lapEndY,
-        status: paceStatus({ totalSec: lapEndSec, laps: n, goalMiles }),
+        status: paceStatus({
+          totalSec: lapEndSec,
+          laps: n,
+          goalMiles,
+          lapSecs: throughThis,
+        }),
       });
     } else if (hasLapStart) {
       segments.push({
@@ -109,7 +135,12 @@ export function PaceChart({
         y1: prevY,
         x2: lapEndSec,
         y2: lapEndY,
-        status: paceStatus({ totalSec: lapEndSec, laps: n, goalMiles }),
+        status: paceStatus({
+          totalSec: lapEndSec,
+          laps: n,
+          goalMiles,
+          lapSecs: throughThis,
+        }),
       });
     } else {
       // No segment-level breakdown — fall back to one combined line from
@@ -120,23 +151,39 @@ export function PaceChart({
         y1: lastLapEndMiles,
         x2: lapEndSec,
         y2: lapEndY,
-        status: paceStatus({ totalSec: lapEndSec, laps: n, goalMiles }),
+        status: paceStatus({
+          totalSec: lapEndSec,
+          laps: n,
+          goalMiles,
+          lapSecs: throughThis,
+        }),
       });
     }
 
     lapMarkers.push({ x: lapEndSec, y: lapEndY });
     lastLapEndSec = lapEndSec;
     lastLapEndMiles = lapEndY;
+    lapDurations.push(thisLapDur);
+    prevEndSecForDur = lapEndSec;
   }
 
-  // Projection from the last actual point at current avg pace.
+  // Projection at TRAILING pace (last 3 lap wall-clock durations), so a
+  // fading athlete's forecast doesn't keep tilting upward at their early-lap
+  // pace. Falls back to cumulative avg if we somehow have no lap durations.
+  const trailWindow = lapDurations.slice(-3);
+  const trailAvg =
+    trailWindow.length > 0
+      ? trailWindow.reduce((s, x) => s + x, 0) / trailWindow.length
+      : laps > 0 && totalSec > 0
+        ? totalSec / laps
+        : null;
+
   const lastY = lastLapEndMiles;
   const lastX = lastLapEndSec;
-  const avgLapSec = laps > 0 && totalSec > 0 ? totalSec / laps : null;
 
   let projectionEnd: { x: number; y: number } | null = null;
-  if (avgLapSec && lastY < goalMiles) {
-    const slope = LAP_MILES / avgLapSec;
+  if (trailAvg && lastY < goalMiles) {
+    const slope = LAP_MILES / trailAvg;
     const xToGoal = lastX + (goalMiles - lastY) / slope;
     projectionEnd =
       xToGoal <= windowSec
