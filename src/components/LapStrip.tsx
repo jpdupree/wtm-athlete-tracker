@@ -3,7 +3,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { fmtSec } from "@/lib/format";
-import { pitStatus, pitStatusClass } from "@/lib/intake";
+import { pitStatus, pitStatusClass, pitStatusLabel } from "@/lib/intake";
 import { RACE_START } from "@/lib/race";
 import { useEffectivePitSec } from "@/hooks/useEffectivePitSec";
 
@@ -62,15 +62,17 @@ export function LapStrip({ bib, lapCount }: { bib: number; lapCount: number }) {
               <p className="text-xs tabular-nums">
                 {it.durationSec ? fmtSec(it.durationSec) : "—"}
               </p>
-              {it.pitSec != null && (
-                <p
-                  className={`text-[10px] tabular-nums ${pitStatusClass(
-                    pitStatus(it.pitSec, targetForLap(it.n)),
-                  )}`}
-                >
-                  pit {fmtSec(Math.round(it.pitSec))}
-                </p>
-              )}
+              {it.pitSec != null && (() => {
+                const status = pitStatus(it.pitSec, targetForLap(it.n));
+                return (
+                  <p
+                    className={`text-[10px] tabular-nums ${pitStatusClass(status)}`}
+                    aria-label={`Pit ${it.n}: ${fmtSec(Math.round(it.pitSec))}, ${pitStatusLabel(status)}`}
+                  >
+                    pit {fmtSec(Math.round(it.pitSec))}
+                  </p>
+                );
+              })()}
             </a>
           </li>
         ))}

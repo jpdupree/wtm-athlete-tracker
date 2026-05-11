@@ -342,6 +342,13 @@ export function PaceChart({
         {/* Actual series — one <line> per pit/lap segment, colored by paceStatus at segment end. */}
         {segments.map((seg, i) => {
           const stroke = seg.status ? STATUS_STROKE[seg.status] : "currentColor";
+          const statusLabel = seg.status === "green"
+            ? "on pace"
+            : seg.status === "amber"
+              ? "tight"
+              : seg.status === "red"
+                ? "behind"
+                : "no goal";
           return (
             <line
               key={i}
@@ -354,7 +361,9 @@ export function PaceChart({
               strokeLinecap="round"
               strokeDasharray={seg.kind === "pit" ? "3 2" : undefined}
               opacity={seg.status ? 1 : 0.7}
-            />
+            >
+              <title>{`${seg.kind === "pit" ? "Pit" : "Lap"} segment — ${statusLabel}`}</title>
+            </line>
           );
         })}
         {lapMarkers.map((p, i) => (

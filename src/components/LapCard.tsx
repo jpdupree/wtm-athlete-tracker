@@ -5,7 +5,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db, type FuelEntry, type Note } from "@/lib/db";
 import { lapId, markLapManual } from "@/lib/lapSync";
 import { fmtSec, fmtVenueClock } from "@/lib/format";
-import { pitStatus, pitStatusClass } from "@/lib/intake";
+import { pitStatus, pitStatusClass, pitStatusLabel } from "@/lib/intake";
 import { paceStatus, type PaceStatus } from "@/lib/predict";
 import { RACE_START } from "@/lib/race";
 import { useEffectivePitSec } from "@/hooks/useEffectivePitSec";
@@ -114,6 +114,17 @@ export function LapCard({
                   className={`ml-1 ${
                     goalStatus ? statusColor(goalStatus) : deltaColor(deltaSec)
                   }`}
+                  aria-label={
+                    goalStatus
+                      ? `${deltaSec > 0 ? "plus" : "minus"} ${fmtSec(Math.abs(deltaSec))} versus prior lap, ${
+                          goalStatus === "green"
+                            ? "on pace for goal"
+                            : goalStatus === "amber"
+                              ? "tight on goal"
+                              : "off pace for goal"
+                        }`
+                      : `${deltaSec > 0 ? "plus" : "minus"} ${fmtSec(Math.abs(deltaSec))} versus prior lap`
+                  }
                 >
                   ({deltaPrefix(deltaSec)}
                   {fmtSec(Math.abs(deltaSec))})
@@ -199,10 +210,13 @@ function PitTimer({ bib, lapNumber }: { bib: number; lapNumber: number }) {
   // here — these cards reflect the math.
   const { targets, autoSec } = useEffectivePitSec(bib);
   const targetForThisLap = targets.get(lapNumber) ?? autoSec ?? null;
-  const colorClass =
-    durationSec != null
-      ? pitStatusClass(pitStatus(durationSec, targetForThisLap))
-      : "";
+  const pitStatusVal =
+    durationSec != null ? pitStatus(durationSec, targetForThisLap) : null;
+  const colorClass = pitStatusVal ? pitStatusClass(pitStatusVal) : "";
+  const pitAriaLabel =
+    durationSec != null && pitStatusVal
+      ? `Pit ${lapNumber}: ${fmtSec(durationSec)}, ${pitStatusLabel(pitStatusVal)}`
+      : undefined;
   return (
     <div className="px-4 py-3 space-y-2">
       <p className="text-xs uppercase tracking-wide opacity-60">Pit {lapNumber} timing</p>
@@ -213,7 +227,7 @@ function PitTimer({ bib, lapNumber }: { bib: number; lapNumber: number }) {
           </span>
         )}
         {end && (
-          <span className={`tabular-nums ${colorClass}`}>
+          <span className={`tabular-nums ${colorClass}`} aria-label={pitAriaLabel}>
             out {fmtVenueClock(end)}
             {durationSec != null && ` · ${fmtSec(durationSec)}`}
           </span>

@@ -112,6 +112,22 @@ export function pitStatusClass(status: PitStatus): string {
   }
 }
 
+// Plain-text equivalent of the color status — used as aria-label backup
+// so screen readers (and color-vision-deficient users with high-contrast
+// modes) get the signal, not just the hue.
+export function pitStatusLabel(status: PitStatus): string {
+  switch (status) {
+    case "green":
+      return "on budget";
+    case "amber":
+      return "tight";
+    case "red":
+      return "over budget";
+    default:
+      return "no goal set";
+  }
+}
+
 // "Per hour" rate by course time (total - pits). Falls back to total elapsed
 // when no pits are recorded (early race or crew hasn't logged any).
 export function computeRates(opts: {
