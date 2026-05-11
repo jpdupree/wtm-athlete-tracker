@@ -26,9 +26,17 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
+// Runs before paint so the theme tokens are applied without a flash. Reads
+// localStorage; falls back to system preference; default (no script run) is
+// the dark tokens already on :root.
+const themeInitScript = `(function(){try{var k='wtm-theme';var t=localStorage.getItem(k);if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';}document.documentElement.dataset.theme=t;}catch(e){}})();`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={displayFont.variable}>
+    <html lang="en" className={displayFont.variable} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
       <body className="min-h-screen antialiased">
         <FeedProvider>
           <LapSyncProvider>{children}</LapSyncProvider>

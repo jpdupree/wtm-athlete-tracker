@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { FollowedList } from "@/components/FollowedList";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const LINKS = [
   // Pointing at the 2025 event for now until the 2026 page goes live.
@@ -11,25 +12,28 @@ const LINKS = [
 export default function HomePage() {
   return (
     <main className="mx-auto max-w-md px-4 pb-10 pt-6 space-y-6">
-      <header className="space-y-1">
-        <div className="flex items-baseline gap-2">
-          <span
-            className="wtm-display text-4xl font-bold leading-none"
-            style={{ color: "var(--wtm-accent)" }}
-          >
-            WTM
-          </span>
-          <span className="wtm-display text-2xl leading-none opacity-80">
-            Tracker
-          </span>
+      <header className="flex items-start justify-between gap-3">
+        <div className="space-y-1">
+          <div className="flex items-baseline gap-2">
+            <span
+              className="wtm-display text-4xl font-bold leading-none"
+              style={{ color: "var(--wtm-accent)" }}
+            >
+              WTM
+            </span>
+            <span className="wtm-display text-2xl leading-none opacity-80">
+              Tracker
+            </span>
+          </div>
+          <p className="text-xs uppercase tracking-[0.18em] opacity-50">
+            World&apos;s Toughest Mudder · 27 Jun 2026
+          </p>
+          <div
+            className="h-px w-12 mt-2"
+            style={{ background: "var(--wtm-accent)" }}
+          />
         </div>
-        <p className="text-xs uppercase tracking-[0.18em] opacity-50">
-          World&apos;s Toughest Mudder · 27 Jun 2026
-        </p>
-        <div
-          className="h-px w-12 mt-2"
-          style={{ background: "var(--wtm-accent)" }}
-        />
+        <ThemeToggle />
       </header>
 
       <FollowedList />
