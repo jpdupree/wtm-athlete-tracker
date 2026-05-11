@@ -7,7 +7,7 @@
 // Bump CACHE when the SHELL list or the caching strategy changes — the
 // activate handler deletes any older caches so the new shell wins.
 
-const CACHE = "wtm-v2";
+const CACHE = "wtm-v3";
 const SHELL = [
   "/",
   "/add",
@@ -60,6 +60,54 @@ self.addEventListener("fetch", (e) => {
               }),
           ),
         ),
+    );
+    return;
+  }
+
+  // Athlete detail pages — /a/<bib> — are dynamic so they can't be in the
+  // pre-cached shell. Cache-first when possible, but if we're offline and
+  // this specific bib isn't cached, fall back to ANY cached /a/<bib>
+  // shell: the page is a client component that re-renders from the URL +
+  // dexie + cached API on hydration, so one cached shell is enough to
+  // bootstrap any bib offline. The followed list also proactively warms
+  // each followed athlete's URL into the cache on every sync.
+  if (url.pathname.startsWith("/a/")) {
+    e.respondWith(
+      caches.match(e.request).then(async (cached) => {
+        if (cached) {
+          // Refresh in background so the next online hit is fresh.
+          fetch(e.request)
+            .then((res) => {
+              if (res.ok) {
+                const copy = res.clone();
+                caches.open(CACHE).then((c) => c.put(e.request, copy));
+              }
+            })
+            .catch(() => {});
+          return cached;
+        }
+        try {
+          const res = await fetch(e.request);
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(e.request, copy));
+          }
+          return res;
+        } catch {
+          const cache = await caches.open(CACHE);
+          const keys = await cache.keys();
+          for (const k of keys) {
+            if (new URL(k.url).pathname.startsWith("/a/")) {
+              const r = await cache.match(k);
+              if (r) return r;
+            }
+          }
+          return (
+            (await caches.match("/")) ??
+            new Response("Offline", { status: 503 })
+          );
+        }
+      }),
     );
     return;
   }

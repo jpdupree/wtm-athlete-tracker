@@ -50,5 +50,21 @@ export function LapSyncProvider({ children }: { children: React.ReactNode }) {
     };
   }, [followed, data?.fetchedAt]);
 
+  // Warm the SW cache with each followed athlete's page so offline
+  // navigation to /a/<bib> works for everyone on the list — without
+  // this, a user who never tapped into a specific athlete while online
+  // gets "site can't be reached" when they try offline.
+  useEffect(() => {
+    if (!followed?.length) return;
+    if (typeof window === "undefined") return;
+    if (!("serviceWorker" in navigator)) return;
+    for (const a of followed) {
+      if (a.paused) continue;
+      // The SW intercepts and caches successful responses; failures are
+      // swallowed because this is a best-effort warm-up.
+      void fetch(`/a/${a.bib}`, { credentials: "same-origin" }).catch(() => {});
+    }
+  }, [followed]);
+
   return <>{children}</>;
 }
