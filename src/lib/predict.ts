@@ -18,6 +18,13 @@ const FADE_RATIOS: number[] = [
 
 // Cumulative slowdown going from `fromLap` pace to lap K pace, based on
 // historical medians. Returns 1.0 when K <= fromLap or when off-table.
+//
+// Capped at MAX_FADE: physically, even finishers don't go more than ~2x
+// their fresh-legs pace. Without a cap, projecting from an early lap (1-2)
+// to a far goal (lap 18-20) compounds 17+ ratios and tips every athlete
+// red — the math diverges where reality saturates.
+const MAX_FADE = 2.0;
+
 export function fadeFactor(fromLap: number, toLap: number): number {
   if (toLap <= fromLap) return 1;
   let f = 1;
@@ -25,6 +32,7 @@ export function fadeFactor(fromLap: number, toLap: number): number {
     const idx = k - 1; // FADE_RATIOS[0] is the 1→2 transition
     if (idx < 0) continue;
     f *= idx < FADE_RATIOS.length ? FADE_RATIOS[idx] : 1;
+    if (f >= MAX_FADE) return MAX_FADE;
   }
   return f;
 }
