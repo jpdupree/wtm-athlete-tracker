@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { configFor } from "@/lib/years";
 import type { FeedResponse, Slice } from "@/lib/types";
 
@@ -19,18 +19,27 @@ export function useFeed(slice: Slice, year: number): UseFeedResult {
   const [data, setData] = useState<FeedResponse | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [loading, setLoading] = useState(true);
-  const aborted = useRef(false);
   const hasData = configFor(year).hasData;
 
   useEffect(() => {
-    aborted.current = false;
-    // Clear any stale data from the previous year/slice combo so
-    // consumers don't briefly see another year's rows during the switch.
+    // PER-RUN cancellation flag — captured by every closure inside this
+    // effect invocation. A shared useRef would get reset by the NEXT
+    // effect's setup before an in-flight fetch from the previous year
+    // resolves, letting an older year's response stomp on newer state
+    // (seen in the wild as the "Add athlete" list briefly flipping to
+    // 2025 results when viewing a different year).
+    let cancelled = false;
+    // Aborts the in-flight network request when the year changes mid-
+    // request, so we don't even wait for it to come back.
+    const ac = new AbortController();
     setData(null);
     setError(null);
     if (!hasData) {
       setLoading(false);
-      return;
+      return () => {
+        cancelled = true;
+        ac.abort();
+      };
     }
     setLoading(true);
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -39,18 +48,22 @@ export function useFeed(slice: Slice, year: number): UseFeedResult {
       try {
         const res = await fetch(
           `/api/results/${slice}?year=${year}`,
-          { cache: "no-store" },
+          { cache: "no-store", signal: ac.signal },
         );
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = (await res.json()) as FeedResponse;
-        if (aborted.current) return;
+        if (cancelled) return;
         setData(json);
         setError(null);
       } catch (e) {
-        if (!aborted.current) setError(e as Error);
+        // AbortError from a year-change is expected; don't surface it
+        // as a real error to the UI.
+        if (cancelled || (e as Error).name === "AbortError") return;
+        setError(e as Error);
       } finally {
-        if (!aborted.current) setLoading(false);
-        if (!aborted.current && typeof document !== "undefined" && !document.hidden) {
+        if (cancelled) return;
+        setLoading(false);
+        if (typeof document !== "undefined" && !document.hidden) {
           timer = setTimeout(tick, POLL_MS);
         }
       }
@@ -62,7 +75,7 @@ export function useFeed(slice: Slice, year: number): UseFeedResult {
           clearTimeout(timer);
           timer = null;
         }
-      } else if (!timer) {
+      } else if (!timer && !cancelled) {
         tick();
       }
     }
@@ -71,7 +84,8 @@ export function useFeed(slice: Slice, year: number): UseFeedResult {
     tick();
 
     return () => {
-      aborted.current = true;
+      cancelled = true;
+      ac.abort();
       if (timer) clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVis);
     };
