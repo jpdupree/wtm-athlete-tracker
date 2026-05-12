@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { db } from "@/lib/db";
+import { useSelectedYear } from "@/hooks/useSelectedYear";
 
 export function ManualAddForm({ initialName = "" }: { initialName?: string }) {
+  const [year] = useSelectedYear();
   const [name, setName] = useState(initialName);
   const [bib, setBib] = useState("");
   const [gender, setGender] = useState<"M" | "F" | "team">("M");
@@ -25,12 +27,19 @@ export function ManualAddForm({ initialName = "" }: { initialName?: string }) {
         setBusy(true);
         try {
           const exists = await db.followed.get(bibN);
-          if (exists) {
+          if (exists && exists.year === year) {
             setError(`Bib #${bibN} is already followed (${exists.name}).`);
             return;
           }
-          await db.followed.add({
+          if (exists && exists.year !== year) {
+            const ok = confirm(
+              `Bib #${bibN} is currently followed as "${exists.name}" for ${exists.year}. Replace with this entry for ${year}?`,
+            );
+            if (!ok) return;
+          }
+          await db.followed.put({
             bib: bibN,
+            year,
             name: name.trim(),
             gender: gender === "team" ? null : gender,
             team: gender === "team" ? "Team" : null,

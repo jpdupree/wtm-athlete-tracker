@@ -1,26 +1,29 @@
 "use client";
 
 import { useNow } from "@/hooks/useNow";
+import { useSelectedYear } from "@/hooks/useSelectedYear";
 import { fmtCountdown, fmtVenueClock } from "@/lib/format";
-import { LAST_LAP_START_CUTOFF, RACE_END, RACE_START } from "@/lib/race";
+import { raceTimingFor } from "@/lib/race";
 
 export function Countdowns() {
   const now = useNow(1000);
+  const [year] = useSelectedYear();
+  const { start, lastLapStartCutoff, end, venueTz } = raceTimingFor(year);
 
-  const toStart = RACE_START.getTime() - now;
-  const toCutoff = LAST_LAP_START_CUTOFF.getTime() - now;
-  const toEnd = RACE_END.getTime() - now;
+  const toStart = start.getTime() - now;
+  const toCutoff = lastLapStartCutoff.getTime() - now;
+  const toEnd = end.getTime() - now;
 
   if (toStart > 0) {
     return (
-      <Card label="Race starts" main={fmtCountdown(toStart)} sub={fmtVenueClock(RACE_START)} />
+      <Card label="Race starts" main={fmtCountdown(toStart)} sub={fmtVenueClock(start, venueTz)} />
     );
   }
   if (toCutoff > 0) {
     return (
       <div className="grid grid-cols-2 gap-2">
         <Card label="Cutoff" main={fmtCountdown(toCutoff)} sub="No new laps after" />
-        <Card label="Race ends" main={fmtCountdown(toEnd)} sub={fmtVenueClock(RACE_END)} />
+        <Card label="Race ends" main={fmtCountdown(toEnd)} sub={fmtVenueClock(end, venueTz)} />
       </div>
     );
   }
@@ -33,7 +36,7 @@ export function Countdowns() {
       />
     );
   }
-  return <Card label="Race" main="Finished" sub={fmtVenueClock(RACE_END)} />;
+  return <Card label="Race" main="Finished" sub={fmtVenueClock(end, venueTz)} />;
 }
 
 function Card({ label, main, sub }: { label: string; main: string; sub: string }) {

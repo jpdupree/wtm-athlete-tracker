@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, type FollowedAthlete } from "@/lib/db";
 import { useOverallFeed } from "@/components/FeedProvider";
+import { useSelectedYear } from "@/hooks/useSelectedYear";
 import { predict } from "@/lib/predict";
 import { LAP_MILES } from "@/lib/race";
 import type { Athlete } from "@/lib/types";
@@ -19,9 +20,10 @@ const SORTS: Array<{ key: SortKey; label: string; hint: string }> = [
 ];
 
 export function FollowedList() {
+  const [year] = useSelectedYear();
   const rawFollowed = useLiveQuery(
-    () => db.followed.orderBy("addedAt").toArray(),
-    [],
+    () => db.followed.where("year").equals(year).sortBy("addedAt"),
+    [year],
   );
   const { data } = useOverallFeed();
 

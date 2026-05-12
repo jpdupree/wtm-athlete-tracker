@@ -26,28 +26,35 @@ export type YearConfig = {
 // page which redirects to the current stream on race day.
 export const YEARS: YearConfig[] = [
   {
+    year: 2021,
+    eventId: "186269",
+    liveStreamUrl: null,
+    venue: "Laughlin, NV",
+    hasData: true,
+  },
+  {
     year: 2022,
-    eventId: null,
+    eventId: "225090",
     liveStreamUrl:
       "https://youtube.com/playlist?list=PLyK0g0eIg3RUatl_wqdq80W5fLcUyB1rW&si=V549l4spA0XEJKVU",
-    venue: "Atlanta Motor Speedway",
-    hasData: false,
+    venue: "Atmore, AL",
+    hasData: true,
   },
   {
     year: 2023,
-    eventId: null,
+    eventId: "268297",
     liveStreamUrl:
       "https://youtube.com/playlist?list=PLyK0g0eIg3RUsISbDpQ4GVWqpQeYojXrD&si=sLFvoifPBAvlFIDD",
-    venue: "Atlanta Motor Speedway",
-    hasData: false,
+    venue: "Texas",
+    hasData: true,
   },
   {
     year: 2024,
-    eventId: null,
+    eventId: "316804",
     liveStreamUrl:
       "https://youtube.com/playlist?list=PLyK0g0eIg3RVw1pdRLA86GNFXJnAfcKeb&si=Qe3MMiChPpJwoc71",
-    venue: "Atlanta Motor Speedway",
-    hasData: false,
+    venue: "Florida",
+    hasData: true,
   },
   {
     year: 2025,

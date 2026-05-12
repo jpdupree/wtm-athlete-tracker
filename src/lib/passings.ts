@@ -1,6 +1,6 @@
 import { getAllPassings } from "./fixtures";
 import { kvGet, kvSet } from "./kv";
-import { RACE_START } from "./race";
+import { raceTimingFor } from "./race";
 import type { Passing, RawPassing } from "./types";
 
 const FRESH_MS = 15_000;
@@ -14,7 +14,7 @@ function parseHmsToSec(s: string | undefined | null): number | null {
   return null;
 }
 
-function todToISO(tod: string | undefined | null): string | null {
+function todToISO(tod: string | undefined | null, raceStart: Date): string | null {
   if (!tod) return null;
   const m = tod.match(/^(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)$/i);
   if (!m) return null;
@@ -24,33 +24,35 @@ function todToISO(tod: string | undefined | null): string | null {
   const ap = m[4].toUpperCase();
   if (ap === "PM" && h !== 12) h += 12;
   if (ap === "AM" && h === 12) h = 0;
+  const offsetHours = raceStart.getUTCHours() - 12;
   const d = new Date(Date.UTC(
-    RACE_START.getUTCFullYear(),
-    RACE_START.getUTCMonth(),
-    RACE_START.getUTCDate(),
-    h - 1, mi, s,
+    raceStart.getUTCFullYear(),
+    raceStart.getUTCMonth(),
+    raceStart.getUTCDate(),
+    h + offsetHours, mi, s,
   ));
-  if (d.getTime() < RACE_START.getTime()) d.setUTCDate(d.getUTCDate() + 1);
+  if (d.getTime() < raceStart.getTime()) d.setUTCDate(d.getUTCDate() + 1);
   return d.toISOString();
 }
 
-function normalizePassing(r: RawPassing): Passing | null {
+function normalizePassing(r: RawPassing, raceStart: Date): Passing | null {
   const bib = typeof r.Bib === "number" ? r.Bib : parseInt(String(r.Bib), 10);
   const rawLap = r.Loop ?? r.Lap ?? r.Section ?? null;
   const lapNumber =
     typeof rawLap === "number" ? rawLap : rawLap ? parseInt(String(rawLap), 10) : NaN;
   if (!Number.isFinite(bib) || !Number.isFinite(lapNumber)) return null;
   const elapsedSec = parseHmsToSec(r.Time ?? null);
-  const todISO = todToISO(r.TOD ?? null);
+  const todISO = todToISO(r.TOD ?? null, raceStart);
   let completedAt: string | null = todISO;
   if (!completedAt && elapsedSec != null) {
-    completedAt = new Date(RACE_START.getTime() + elapsedSec * 1000).toISOString();
+    completedAt = new Date(raceStart.getTime() + elapsedSec * 1000).toISOString();
   }
   if (!completedAt) return null;
   return {
     bib,
     lapNumber,
-    elapsedSec: elapsedSec ?? (new Date(completedAt).getTime() - RACE_START.getTime()) / 1000,
+    elapsedSec:
+      elapsedSec ?? (new Date(completedAt).getTime() - raceStart.getTime()) / 1000,
     completedAt,
     // Upstream RawPassing doesn't expose pit / lap durations directly; the
     // fixtures path supplies them. Leave null when not available.
@@ -59,30 +61,36 @@ function normalizePassing(r: RawPassing): Passing | null {
   };
 }
 
-async function fetchAllPassings(): Promise<Passing[]> {
+async function fetchAllPassings(year: number): Promise<Passing[]> {
   const url = process.env.RACE_FEED_PASSINGS;
-  if (url) {
+  const liveYear = parseInt(process.env.RACE_FEED_YEAR ?? "", 10);
+  const isLiveYear = Number.isFinite(liveYear) ? year === liveYear : true;
+  if (url && isLiveYear) {
     const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) throw new Error(`passings upstream: ${res.status}`);
     const rows = (await res.json()) as RawPassing[];
+    const raceStart = raceTimingFor(year).start;
     return rows
-      .map(normalizePassing)
+      .map((r) => normalizePassing(r, raceStart))
       .filter((p): p is Passing => p !== null);
   }
-  // Real per-lap data from test/fixtures/lap_details_{individual,team}.csv.
-  return getAllPassings();
+  // Real per-lap data from test/fixtures/<year>/lap_details_{individual,team}.csv.
+  return getAllPassings(year);
 }
 
 type CachePayload = { fetchedAt: string; passings: Passing[] };
 
-export async function getPassingsForBib(bib: number): Promise<{
+export async function getPassingsForBib(
+  bib: number,
+  year: number,
+): Promise<{
   fetchedAt: string;
   cached: boolean;
   ageMs: number;
   synthetic: boolean;
   passings: Passing[];
 }> {
-  const cacheKey = "passings:all";
+  const cacheKey = `passings:${year}:all`;
   const now = Date.now();
   let payload = await kvGet<CachePayload>(cacheKey);
   let cached = false;
@@ -96,7 +104,7 @@ export async function getPassingsForBib(bib: number): Promise<{
     }
   }
   if (!payload) {
-    const passings = await fetchAllPassings();
+    const passings = await fetchAllPassings(year);
     payload = { fetchedAt: new Date(now).toISOString(), passings };
     await kvSet<CachePayload>(cacheKey, payload);
     ageMs = 0;

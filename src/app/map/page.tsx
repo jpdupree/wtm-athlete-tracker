@@ -6,12 +6,17 @@ import { db, type FollowedAthlete } from "@/lib/db";
 import type { Athlete } from "@/lib/types";
 import { useOverallFeed } from "@/components/FeedProvider";
 import { useNow } from "@/hooks/useNow";
+import { useSelectedYear } from "@/hooks/useSelectedYear";
 import { predictPosition } from "@/lib/position";
 import { lapId } from "@/lib/lapSync";
 import { fmtCountdown, fmtSec } from "@/lib/format";
 
 export default function MapPage() {
-  const followed = useLiveQuery(() => db.followed.orderBy("addedAt").toArray(), []);
+  const [year] = useSelectedYear();
+  const followed = useLiveQuery(
+    () => db.followed.where("year").equals(year).sortBy("addedAt"),
+    [year],
+  );
   const { data } = useOverallFeed();
   const now = useNow(2000);
 

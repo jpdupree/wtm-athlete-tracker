@@ -81,16 +81,25 @@ export function predict(opts: {
     avg = opts.totalSec / opts.laps;
   }
 
-  // Past elapsed time (totalSec) is what it is — only extrapolate the
-  // remaining laps. Each remaining lap is scaled by its historical fade
-  // factor relative to the athlete's current pace, so an early-race
-  // projection accounts for the well-known initial slowdown (mostly the
-  // first pit settling in) instead of flat-extrapolating fresh-legs pace.
+  // Past elapsed time is what it is — only extrapolate the remaining
+  // laps. Each remaining lap is scaled by its historical fade factor
+  // relative to the athlete's current pace, so an early-race projection
+  // accounts for the well-known initial slowdown (mostly the first pit
+  // settling in) instead of flat-extrapolating fresh-legs pace.
   let projectedRemainingSec = 0;
   for (let k = opts.laps + 1; k <= goalLaps; k++) {
     projectedRemainingSec += avg * fadeFactor(opts.laps, k);
   }
-  const finishSec = opts.totalSec + projectedRemainingSec;
+  // totalSec on the row matches the official scoreboard — lap time only,
+  // no pits. When per-lap wall-clock durations (lapSecs include pit + run
+  // between lap-end timestamps) are available, prefer their sum so the
+  // projected finish lines up with wall-clock race time. Falls back to
+  // totalSec for the early-race case before any laps are synced.
+  const elapsedSec =
+    opts.lapSecs && opts.lapSecs.length > 0
+      ? opts.lapSecs.reduce((s, x) => s + x, 0)
+      : opts.totalSec;
+  const finishSec = elapsedSec + projectedRemainingSec;
   const finishMs = RACE_START.getTime() + finishSec * 1000;
 
   return {

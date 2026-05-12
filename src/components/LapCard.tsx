@@ -7,8 +7,9 @@ import { lapId, markLapManual } from "@/lib/lapSync";
 import { fmtSec, fmtVenueClock } from "@/lib/format";
 import { pitStatus, pitStatusClass, pitStatusLabel } from "@/lib/intake";
 import { paceStatus, type PaceStatus } from "@/lib/predict";
-import { RACE_START } from "@/lib/race";
+import { raceTimingFor } from "@/lib/race";
 import { useEffectivePitSec } from "@/hooks/useEffectivePitSec";
+import { useSelectedYear } from "@/hooks/useSelectedYear";
 
 type Target = "lap" | "pit";
 
@@ -21,6 +22,11 @@ export function LapCard({
   lapNumber: number;
   inProgress: boolean;
 }) {
+  const [year] = useSelectedYear();
+  // The selected year's RACE_START is the anchor for lap-1's "previous
+  // end" and for the running totalSec calculation — matches the
+  // year-aware timestamps stored in db.laps by the ingestion layer.
+  const { start: raceStartForTiming, venueTz } = raceTimingFor(year);
   const lap = useLiveQuery(() => db.laps.get(lapId(bib, lapNumber)), [bib, lapNumber]);
   const prevLap = useLiveQuery(
     async () =>
@@ -35,14 +41,16 @@ export function LapCard({
 
   const completedAt = lap?.lapCompletedAt ?? null;
   const prevEnd =
-    lapNumber === 1 ? RACE_START.toISOString() : prevLap?.lapCompletedAt ?? null;
+    lapNumber === 1 ? raceStartForTiming.toISOString() : prevLap?.lapCompletedAt ?? null;
   const durationSec =
     completedAt && prevEnd
       ? Math.round((new Date(completedAt).getTime() - new Date(prevEnd).getTime()) / 1000)
       : null;
 
   const prevPrevEnd =
-    lapNumber === 2 ? RACE_START.toISOString() : prevPrevLap?.lapCompletedAt ?? null;
+    lapNumber === 2
+      ? raceStartForTiming.toISOString()
+      : prevPrevLap?.lapCompletedAt ?? null;
   const prevDurationSec =
     prevLap?.lapCompletedAt && prevPrevEnd
       ? Math.round(
@@ -57,7 +65,8 @@ export function LapCard({
   // Goal-aware pace status for this lap end, so the +/- next to the lap time
   // matches the pace-chart segment color: a slower-than-prior lap still goes
   // green if the projected finish is comfortably hitting the goal.
-  const followed = useLiveQuery(() => db.followed.get(bib), [bib]);
+  const record = useLiveQuery(() => db.followed.get(bib), [bib]);
+  const followed = record && record.year === year ? record : undefined;
   const lapsUpToHere = useLiveQuery(
     async () => {
       const all = await db.laps.where("bib").equals(bib).toArray();
@@ -69,7 +78,7 @@ export function LapCard({
   );
   const lapDurations: number[] = [];
   {
-    let prevEndMs = RACE_START.getTime();
+    let prevEndMs = raceStartForTiming.getTime();
     for (const l of lapsUpToHere ?? []) {
       if (!l.lapCompletedAt) continue;
       const endMs = new Date(l.lapCompletedAt).getTime();
@@ -78,7 +87,7 @@ export function LapCard({
     }
   }
   const totalSecAtLapEnd = completedAt
-    ? (new Date(completedAt).getTime() - RACE_START.getTime()) / 1000
+    ? (new Date(completedAt).getTime() - raceStartForTiming.getTime()) / 1000
     : null;
   const goalStatus: PaceStatus | null =
     totalSecAtLapEnd != null && followed?.goalMiles != null
@@ -107,7 +116,7 @@ export function LapCard({
           )}
           {completedAt && (
             <span className="ml-2 text-xs opacity-70 tabular-nums">
-              {fmtVenueClock(completedAt)}
+              {fmtVenueClock(completedAt, venueTz)}
               {durationSec != null && ` · ${fmtSec(durationSec)}`}
               {deltaSec != null && (
                 <span
@@ -150,7 +159,12 @@ export function LapCard({
         </span>
       </summary>
 
-      <div className="border-t border-current/10 divide-y divide-current/10">
+      {/* Body — on screen, render top-to-bottom in source order
+          (lap then pit). In print, swap the lap and pit groups via
+          flex order so the timing reads chronologically: pit AFTER
+          lap N becomes the lead-in to lap N+1, which is the order
+          crew typically reads on race day. */}
+      <div className="border-t border-current/10 divide-y divide-current/10 print:flex print:flex-col">
         {!completedAt && inProgress && (
           <div className="px-4 py-3 print-hide">
             <button
@@ -165,14 +179,16 @@ export function LapCard({
           </div>
         )}
 
-        <Section title={`Lap ${lapNumber} fuel`} bib={bib} lapNumber={lapNumber} target="lap" kind="fuel" />
-        <Section title={`Lap ${lapNumber} notes`} bib={bib} lapNumber={lapNumber} target="lap" kind="note" />
+        <div className="divide-y divide-current/10 print:order-2">
+          <Section title={`Lap ${lapNumber} fuel`} bib={bib} lapNumber={lapNumber} target="lap" kind="fuel" />
+          <Section title={`Lap ${lapNumber} notes`} bib={bib} lapNumber={lapNumber} target="lap" kind="note" />
+        </div>
         {!inProgress && (
-          <>
+          <div className="divide-y divide-current/10 print:order-1">
             <PitTimer bib={bib} lapNumber={lapNumber} />
             <Section title={`Pit ${lapNumber} fuel`} bib={bib} lapNumber={lapNumber} target="pit" kind="fuel" />
             <Section title={`Pit ${lapNumber} notes`} bib={bib} lapNumber={lapNumber} target="pit" kind="note" />
-          </>
+          </div>
         )}
       </div>
     </details>
@@ -196,6 +212,8 @@ function deltaColor(sec: number): string {
 }
 
 function PitTimer({ bib, lapNumber }: { bib: number; lapNumber: number }) {
+  const [year] = useSelectedYear();
+  const venueTz = raceTimingFor(year).venueTz;
   const lap = useLiveQuery(() => db.laps.get(lapId(bib, lapNumber)), [bib, lapNumber]);
   const start = lap?.pitStartedAt;
   const end = lap?.pitCompletedAt;
@@ -223,12 +241,12 @@ function PitTimer({ bib, lapNumber }: { bib: number; lapNumber: number }) {
       <div className="flex items-center gap-2 text-sm">
         {start && (
           <span className="tabular-nums opacity-80">
-            in {fmtVenueClock(start)}
+            in {fmtVenueClock(start, venueTz)}
           </span>
         )}
         {end && (
           <span className={`tabular-nums ${colorClass}`} aria-label={pitAriaLabel}>
-            out {fmtVenueClock(end)}
+            out {fmtVenueClock(end, venueTz)}
             {durationSec != null && ` · ${fmtSec(durationSec)}`}
           </span>
         )}

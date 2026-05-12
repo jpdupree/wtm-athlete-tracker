@@ -13,7 +13,7 @@
 // deletes older caches so the new shell wins for clients that already
 // have an older version.
 
-const CACHE = "wtm-v6";
+const CACHE = "wtm-v28";
 
 // Offline fallback HTML for an athlete page that hasn't been warmed into
 // the cache. Self-contained — inlines its own styles so it doesn't depend

@@ -128,16 +128,18 @@ export function pitStatusLabel(status: PitStatus): string {
   }
 }
 
-// "Per hour" rate by course time (total - pits). Falls back to total elapsed
-// when no pits are recorded (early race or crew hasn't logged any).
+// "Per hour" rate by course time — i.e. the time the athlete actually
+// spent moving on the course (excluding pits). After the totalSec
+// semantic flip to "lap-time-sum" (matching RaceResult's official
+// TotalTime), totalSec IS the course time. The returned courseSec field
+// is preserved for callers that report on it.
 export function computeRates(opts: {
   fuel: FuelEntry[];
   laps: Lap[];
   totalSec: number;
 }): IntakeRates {
   const totals = sumIntake(opts.fuel);
-  const pitSec = sumPitSec(opts.laps);
-  const courseSec = Math.max(0, opts.totalSec - pitSec);
+  const courseSec = Math.max(0, opts.totalSec);
   const denomHr = courseSec / 3600;
   return {
     totals,

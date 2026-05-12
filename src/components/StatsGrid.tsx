@@ -19,13 +19,18 @@ export function StatsGrid({
 }) {
   const lapRows = useLiveQuery(() => db.laps.where("bib").equals(bib).toArray(), [bib]);
 
+  // totalSec is the official scoreboard TotalTime — what RaceResult
+  // shows. Its semantics differ year-to-year (some years are moving-
+  // only, others are wall-clock-including-pits), so we just display
+  // the official value rather than trying to derive a separate
+  // wall-clock number that may or may not match.
   const pitSec = sumPitSec(lapRows ?? []);
-  const courseSec = Math.max(0, totalSec - pitSec);
   const pitCount = (lapRows ?? []).filter(
     (l) => l.pitStartedAt && l.pitCompletedAt,
   ).length;
   const avgPitSec = pitCount > 0 ? pitSec / pitCount : null;
-  const avgLapSec = laps > 0 && courseSec > 0 ? courseSec / laps : null;
+  const movingSec = Math.max(0, totalSec - pitSec);
+  const avgLapSec = laps > 0 && movingSec > 0 ? movingSec / laps : null;
   const distance = laps * LAP_MILES;
 
   return (
@@ -37,13 +42,13 @@ export function StatsGrid({
       />
       <Tile
         label="Total time"
-        main={fmtSec(totalSec) ?? "—"}
-        sub="clock since start"
+        main={totalSec > 0 ? fmtSec(totalSec) : "—"}
+        sub="official"
       />
       <Tile
-        label="Course time"
-        main={courseSec > 0 ? fmtSec(courseSec) : "—"}
-        sub={avgLapSec ? `avg lap ${fmtSec(Math.round(avgLapSec))}` : ""}
+        label="Avg lap"
+        main={avgLapSec ? fmtSec(Math.round(avgLapSec)) : "—"}
+        sub="moving (excl. pits)"
       />
       <Tile
         label="Pit time"

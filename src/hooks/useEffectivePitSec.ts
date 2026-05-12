@@ -3,7 +3,8 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { recommendPitSec } from "@/lib/predict";
-import { RACE_START } from "@/lib/race";
+import { raceTimingFor } from "@/lib/race";
+import { useSelectedYear } from "./useSelectedYear";
 
 export type EffectivePitSec = {
   // Effective per-pit target — user override if set, otherwise the latest
@@ -28,11 +29,17 @@ export type EffectivePitSec = {
 const EMPTY_TARGETS: Map<number, number> = new Map();
 
 export function useEffectivePitSec(bib: number): EffectivePitSec {
-  const followed = useLiveQuery(() => db.followed.get(bib), [bib]);
+  const [year] = useSelectedYear();
+  const record = useLiveQuery(() => db.followed.get(bib), [bib]);
   const laps = useLiveQuery(
     () => db.laps.where("bib").equals(bib).sortBy("lapNumber"),
     [bib],
   );
+
+  // Only act on a follow record that belongs to the selected year — a
+  // record for a different year (same bib, different athlete) isn't
+  // ours to budget pits against.
+  const followed = record && record.year === year ? record : undefined;
 
   if (!followed) {
     return { sec: null, autoSec: null, targets: EMPTY_TARGETS, source: null };
@@ -56,6 +63,7 @@ export function useEffectivePitSec(bib: number): EffectivePitSec {
 
   const targets = new Map<number, number>();
   let autoSec: number | null = null;
+  const raceStartMs = raceTimingFor(year).start.getTime();
   if (completed.length > 0) {
     // Walk each completed lap, snapshotting the recommendation at that
     // point in the race. Run-only seconds come from the lap's own
@@ -71,7 +79,7 @@ export function useEffectivePitSec(bib: number): EffectivePitSec {
       }
       // Need at least one run sample to project from.
       if (lapRunSecs.length === 0) continue;
-      const totalSecHere = (endMs - RACE_START.getTime()) / 1000;
+      const totalSecHere = (endMs - raceStartMs) / 1000;
       const rec = recommendPitSec({
         goalMiles: followed.goalMiles,
         laps: i + 1,
@@ -93,7 +101,7 @@ export function useEffectivePitSec(bib: number): EffectivePitSec {
     if (completed.length > 0) {
       const last = completed[completed.length - 1];
       const lastEndMs = new Date(last.lapCompletedAt).getTime();
-      const totalSec = (lastEndMs - RACE_START.getTime()) / 1000;
+      const totalSec = (lastEndMs - raceStartMs) / 1000;
       autoSec = recommendPitSec({
         goalMiles: followed.goalMiles,
         laps: completed.length,

@@ -5,7 +5,10 @@ import { use, useEffect, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { useAthleteRow } from "@/hooks/useAthleteRow";
+import { useNow } from "@/hooks/useNow";
+import { useSelectedYear } from "@/hooks/useSelectedYear";
 import { fmtAge, fmtSec, fmtVenueClock } from "@/lib/format";
+import { raceTimingFor } from "@/lib/race";
 import { predict } from "@/lib/predict";
 import { Countdowns } from "@/components/Countdowns";
 import { GoalMilesEditor } from "@/components/GoalMilesEditor";
@@ -28,7 +31,12 @@ export default function AthleteDetailPage({
 }) {
   const { bib: bibParam } = use(params);
   const bib = parseInt(bibParam, 10);
-  const followed = useLiveQuery(() => db.followed.get(bib), [bib]);
+  const [year] = useSelectedYear();
+  const record = useLiveQuery(() => db.followed.get(bib), [bib]);
+  // Treat a record from a different year as "not following" — same bib
+  // in another year is a different athlete.
+  const followed =
+    record === undefined ? undefined : record && record.year === year ? record : null;
   const { row, loading, error, ageMs } = useAthleteRow(bib);
 
   // dexie can hang in in-app webviews; collapse undefined → null after 3s
@@ -77,9 +85,18 @@ export default function AthleteDetailPage({
   const displayBib = bib;
   const displayGender = followedResolved?.gender ?? row?.gender ?? null;
 
+  // Once the 25.5h cutoff passes, the speculative "next lap in progress"
+  // card is meaningless — the athlete either finished it before the cutoff
+  // (in which case it's in apiLaps already) or it doesn't count. Hide the
+  // placeholder so the list reflects the final standing. The cutoff is
+  // per-year so the 2025 view treats the race as already finished while
+  // 2026 stays "live."
+  const now = useNow(60_000);
+  const raceOver = now >= raceTimingFor(year).end.getTime();
   const apiLaps = row?.laps ?? 0;
+  const topLap = raceOver ? apiLaps : apiLaps + 1;
   const lapNumbers: number[] = [];
-  for (let n = apiLaps + 1; n >= 1; n--) lapNumbers.push(n);
+  for (let n = topLap; n >= 1; n--) lapNumbers.push(n);
 
   return (
     <main className="mx-auto max-w-md px-4 py-6 space-y-4">
@@ -92,7 +109,10 @@ export default function AthleteDetailPage({
         </Link>
         <div className="flex items-center gap-2">
           {isFollowed && followedResolved && (
-            <PauseToggle bib={followedResolved.bib} paused={!!followedResolved.paused} />
+            <PauseToggle
+              bib={followedResolved.bib}
+              paused={!!followedResolved.paused}
+            />
           )}
           <ShareButton name={displayName} bib={displayBib} />
           {isFollowed && <PrintButton />}
@@ -141,9 +161,10 @@ export default function AthleteDetailPage({
           upgrades them to the full interactive view in this same session. */}
       {!isFollowed && row && (
         <>
-          <PublicSummary row={row} ageMs={ageMs} />
+          <PublicSummary row={row} ageMs={ageMs} venueTz={raceTimingFor(year).venueTz} />
           <FollowCTA
             bib={bib}
+            year={year}
             row={row}
             disabled={isLoadingFollowed}
           />
@@ -230,7 +251,15 @@ export default function AthleteDetailPage({
 // Read-only snapshot for visitors who haven't followed the athlete on this
 // device. Built entirely from the live feed row — no dexie data needed,
 // so it works in in-app webviews and on first-visit shares.
-function PublicSummary({ row, ageMs }: { row: Athlete; ageMs: number }) {
+function PublicSummary({
+  row,
+  ageMs,
+  venueTz,
+}: {
+  row: Athlete;
+  ageMs: number;
+  venueTz: string;
+}) {
   // Light-weight finish projection driven by overall-feed data only.
   // Mirrors what FinishPrediction shows, but with the cumulative-average
   // model since we don't have per-lap data here.
@@ -256,7 +285,7 @@ function PublicSummary({ row, ageMs }: { row: Athlete; ageMs: number }) {
         <StatTile
           label="Last seen"
           main={row.lastSeenLabel || "—"}
-          sub={row.lastSeenAt ? fmtVenueClock(row.lastSeenAt) : ""}
+          sub={row.lastSeenAt ? fmtVenueClock(row.lastSeenAt, venueTz) : ""}
         />
         <StatTile
           label="Last lap"
@@ -287,10 +316,12 @@ function StatTile({ label, main, sub }: { label: string; main: string; sub?: str
 
 function FollowCTA({
   bib,
+  year,
   row,
   disabled,
 }: {
   bib: number;
+  year: number;
   row: Athlete;
   disabled?: boolean;
 }) {
@@ -323,8 +354,11 @@ function FollowCTA({
           setError(null);
           setBusy(true);
           try {
-            await db.followed.add({
+            // put() upserts so this works even if a record exists for
+            // this bib in a different year (different athlete).
+            await db.followed.put({
               bib,
+              year,
               name: row.name,
               gender: row.gender,
               team: row.category === "Team" || row.category === "TeamMember" ? row.category : null,

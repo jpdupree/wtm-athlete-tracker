@@ -4,10 +4,13 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { fmtSec } from "@/lib/format";
 import { pitStatus, pitStatusClass, pitStatusLabel } from "@/lib/intake";
-import { RACE_START } from "@/lib/race";
+import { raceTimingFor } from "@/lib/race";
 import { useEffectivePitSec } from "@/hooks/useEffectivePitSec";
+import { useSelectedYear } from "@/hooks/useSelectedYear";
 
 export function LapStrip({ bib, lapCount }: { bib: number; lapCount: number }) {
+  const [year] = useSelectedYear();
+  const raceStart = raceTimingFor(year).start;
   const lapRows = useLiveQuery(
     () => db.laps.where("bib").equals(bib).sortBy("lapNumber"),
     [bib],
@@ -35,7 +38,7 @@ export function LapStrip({ bib, lapCount }: { bib: number; lapCount: number }) {
   }
 
   const items: Array<{ n: number; durationSec: number | null; pitSec: number | null }> = [];
-  let prevEnd = RACE_START.toISOString();
+  let prevEnd = raceStart.toISOString();
   for (let n = 1; n <= lapCount; n++) {
     const entry = byNumber.get(n);
     const end = entry?.completedAt ?? null;

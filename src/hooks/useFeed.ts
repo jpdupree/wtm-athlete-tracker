@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { configFor } from "@/lib/years";
 import type { FeedResponse, Slice } from "@/lib/types";
 
 const POLL_MS = 15_000;
@@ -11,19 +12,35 @@ export type UseFeedResult = {
   loading: boolean;
 };
 
-export function useFeed(slice: Slice): UseFeedResult {
+// Polls /api/results/<slice>?year=<year>. When the configured year hasn't
+// had data wired up, this returns {data:null,loading:false,error:null}
+// immediately — no network traffic, no spinner.
+export function useFeed(slice: Slice, year: number): UseFeedResult {
   const [data, setData] = useState<FeedResponse | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [loading, setLoading] = useState(true);
   const aborted = useRef(false);
+  const hasData = configFor(year).hasData;
 
   useEffect(() => {
     aborted.current = false;
+    // Clear any stale data from the previous year/slice combo so
+    // consumers don't briefly see another year's rows during the switch.
+    setData(null);
+    setError(null);
+    if (!hasData) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     async function tick() {
       try {
-        const res = await fetch(`/api/results/${slice}`, { cache: "no-store" });
+        const res = await fetch(
+          `/api/results/${slice}?year=${year}`,
+          { cache: "no-store" },
+        );
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = (await res.json()) as FeedResponse;
         if (aborted.current) return;
@@ -58,7 +75,7 @@ export function useFeed(slice: Slice): UseFeedResult {
       if (timer) clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [slice]);
+  }, [slice, year, hasData]);
 
   return { data, error, loading };
 }

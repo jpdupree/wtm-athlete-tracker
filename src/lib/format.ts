@@ -29,13 +29,19 @@ export function fmtCountdown(ms: number): string {
 }
 
 // Render an ISO timestamp as "Sat 12:00 BST" — venue local clock.
-export function fmtVenueClock(iso: string | Date): string {
+// Defaults to Europe/London (the upcoming UK race) so existing callers
+// keep working; pass an IANA timezone like "America/New_York" for the
+// Atlanta-era events (2022-2024).
+export function fmtVenueClock(
+  iso: string | Date,
+  timeZone: string = "Europe/London",
+): string {
   const d = iso instanceof Date ? iso : new Date(iso);
   return d.toLocaleString("en-GB", {
     weekday: "short",
     hour: "2-digit",
     minute: "2-digit",
-    timeZone: "Europe/London",
+    timeZone,
     timeZoneName: "short",
   });
 }

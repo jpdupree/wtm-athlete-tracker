@@ -4,15 +4,17 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useOverallFeed } from "@/components/FeedProvider";
 import { useFeed } from "@/hooks/useFeed";
+import { useSelectedYear } from "@/hooks/useSelectedYear";
 import { fmtAge, fmtSec } from "@/lib/format";
 import { FollowButton } from "@/components/FollowButton";
 import { ManualAddForm } from "@/components/ManualAddForm";
 
 export default function AddAthletePage() {
+  const [year] = useSelectedYear();
   const { data, error, loading } = useOverallFeed();
   // Teams aren't in the overall slice (different ranking semantics), but
   // for the picker we want everything followable in one list.
-  const teamsFeed = useFeed("teams");
+  const teamsFeed = useFeed("teams", year);
   const [q, setQ] = useState("");
   const [manualOpen, setManualOpen] = useState(false);
 

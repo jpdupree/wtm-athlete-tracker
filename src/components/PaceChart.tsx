@@ -3,7 +3,8 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, type Lap } from "@/lib/db";
 import { useNow } from "@/hooks/useNow";
-import { LAP_MILES, LAST_LAP_START_CUTOFF, RACE_END, RACE_START } from "@/lib/race";
+import { useSelectedYear } from "@/hooks/useSelectedYear";
+import { LAP_MILES, raceTimingFor } from "@/lib/race";
 import { fadeFactor, paceStatus, type PaceStatus } from "@/lib/predict";
 
 const W = 320;
@@ -40,6 +41,7 @@ export function PaceChart({
   goalMiles: number | null;
 }) {
   const now = useNow(10_000);
+  const [year] = useSelectedYear();
   const lapRows = useLiveQuery(
     () => db.laps.where("bib").equals(bib).sortBy("lapNumber"),
     [bib],
@@ -53,24 +55,44 @@ export function PaceChart({
     );
   }
 
-  const raceStartMs = RACE_START.getTime();
-  const raceEndMs = RACE_END.getTime();
-  const cutoffMs = LAST_LAP_START_CUTOFF.getTime();
+  // Lap timestamps in db.laps are stored in the year's wall-clock (set by
+  // raceFeed/passings when the data was ingested). Compute the chart
+  // window against the same year's RACE_START so 2024 lap times don't
+  // fall a half-year outside the plotted axis.
+  const timing = raceTimingFor(year);
+  const raceStartMs = timing.start.getTime();
+  const raceEndMs = timing.end.getTime();
+  const cutoffMs = timing.lastLapStartCutoff.getTime();
   const windowSec = (raceEndMs - raceStartMs) / 1000;
   const cutoffSec = (cutoffMs - raceStartMs) / 1000;
 
   const secFromStart = (iso: string): number =>
     (new Date(iso).getTime() - raceStartMs) / 1000;
 
-  // ---- Build segments (pit + lap) per lap row.
+  // ---- Build segments per lap.
+  //
+  // X-axis is wall-clock from race start (race time runs continuously,
+  // including during pits). Each lap is drawn as the finish-to-finish
+  // interval connecting the previous lap's dot to this lap's dot — the
+  // pit portion (finish → next start) is dashed, the running portion
+  // (start → finish) is solid. Lap durations (used by the prediction)
+  // are wall-clock-per-lap so a fading athlete's projection slows down
+  // with them.
   const segments: Segment[] = [];
   const lapMarkers: Array<{ x: number; y: number }> = [];
 
   const validLaps = (lapRows ?? []).filter((l): l is Lap => !!l.lapCompletedAt);
 
-  // Wall-clock duration of each completed lap (pit + running). Used for the
-  // trailing-pace prediction so a fading athlete's projection slows down with
-  // them, instead of being anchored to their fresh-legs early-lap average.
+  // Extend the X-axis to fit any late-finishing final lap (an athlete
+  // who started a lap before the 24h cutoff still gets credit even if
+  // it lands past 25.5h wall-clock). Cap removed so the line is never
+  // clipped against the right edge.
+  let axisMaxSec = windowSec;
+  for (const lap of validLaps) {
+    const s = secFromStart(lap.lapCompletedAt!);
+    if (Number.isFinite(s) && s > axisMaxSec) axisMaxSec = s;
+  }
+
   const lapDurations: number[] = [];
 
   let lastLapEndSec = 0;
@@ -79,7 +101,7 @@ export function PaceChart({
   for (const lap of validLaps) {
     const n = lap.lapNumber;
     const lapEndSec = secFromStart(lap.lapCompletedAt!);
-    if (!Number.isFinite(lapEndSec) || lapEndSec < 0 || lapEndSec > windowSec) continue;
+    if (!Number.isFinite(lapEndSec) || lapEndSec < 0 || lapEndSec > axisMaxSec) continue;
 
     const lapEndY = n * LAP_MILES;
     const prevY = (n - 1) * LAP_MILES;
@@ -88,9 +110,6 @@ export function PaceChart({
     const thisLapDur = lapEndSec - prevEndSecForDur;
     const throughThis = [...priorDurs, thisLapDur];
 
-    // Status at the lap's completion (laps-completed = n). The pit that
-    // follows this lap shares the same paceStatus: the athlete has the
-    // same number of laps under their belt while in the pit afterward.
     const statusAtLapEnd = paceStatus({
       totalSec: lapEndSec,
       laps: n,
@@ -99,23 +118,25 @@ export function PaceChart({
     });
 
     const hasLapStart = !!lap.lapStartedAt;
-    // Pit AFTER this lap — stored on lap N's row, drawn at y = lapEndY
-    // (horizontal at the lap's miles, since the pit consumes time without
-    // adding distance).
     const hasPit = lap.pitStartedAt && lap.pitCompletedAt;
 
+    // Pit BEFORE this lap (= finish-to-start of the previous lap → this
+    // lap's start). Stored on the previous lap's row, so for lap N≥2
+    // we read prevLap's pitStartedAt/pitCompletedAt. Drawing it as the
+    // dashed leading portion of this lap's finish-to-finish segment.
+    // For lap 1 there is no prior pit, so the segment is purely solid.
     if (hasLapStart) {
+      const lapStartSec = secFromStart(lap.lapStartedAt!);
+      // Solid running portion: start → finish of this lap.
       segments.push({
         kind: "lap",
-        x1: secFromStart(lap.lapStartedAt!),
+        x1: lapStartSec,
         y1: prevY,
         x2: lapEndSec,
         y2: lapEndY,
         status: statusAtLapEnd,
       });
     } else {
-      // No per-lap start time — fall back to one combined line from
-      // the prior lap end (or origin).
       segments.push({
         kind: "lap",
         x1: lastLapEndSec,
@@ -146,9 +167,10 @@ export function PaceChart({
     prevEndSecForDur = lapEndSec;
   }
 
-  // Projection at TRAILING pace (last 3 lap wall-clock durations), so a
-  // fading athlete's forecast doesn't keep tilting upward at their early-lap
-  // pace. Falls back to cumulative avg if we somehow have no lap durations.
+  // Projection at TRAILING pace (last 3 lap wall-clock durations), so
+  // a fading athlete's forecast doesn't keep tilting upward at their
+  // early-lap pace. Falls back to cumulative avg if we have no per-lap
+  // durations yet.
   const trailWindow = lapDurations.slice(-3);
   const trailAvg =
     trailWindow.length > 0
@@ -189,16 +211,16 @@ export function PaceChart({
 
   const yMax = Math.max(goalMiles, projectionEnd?.y ?? 0, lastY) * 1.08;
 
-  const sx = (x: number) => PAD_L + (x / windowSec) * (W - PAD_L - PAD_R);
+  const sx = (x: number) => PAD_L + (x / axisMaxSec) * (W - PAD_L - PAD_R);
   const sy = (y: number) => H - PAD_B - (y / yMax) * (H - PAD_T - PAD_B);
 
   const cutoffPaceY = Math.max(0, goalMiles - LAP_MILES);
 
-  const nowSec = Math.min(windowSec, Math.max(0, (now - raceStartMs) / 1000));
-  const showNow = nowSec > 0 && nowSec < windowSec;
+  const nowSec = Math.min(axisMaxSec, Math.max(0, (now - raceStartMs) / 1000));
+  const showNow = nowSec > 0 && nowSec < axisMaxSec;
 
   const xTicks: number[] = [];
-  for (let h = 0; h <= windowSec / 3600; h += 4) xTicks.push(h * 3600);
+  for (let h = 0; h <= axisMaxSec / 3600; h += 4) xTicks.push(h * 3600);
 
   const yStep = goalMiles >= 80 ? 20 : goalMiles >= 40 ? 10 : 5;
   const yTicks: number[] = [];
@@ -295,7 +317,10 @@ export function PaceChart({
           required pace
         </text>
 
-        {/* Cutoff vertical at 24h */}
+        {/* Cutoff vertical at 24h — final lap must START before this.
+            Athletes who started a lap before this line and finished it
+            after still get credit, so segments that cross this line
+            are valid (not a missed cutoff). */}
         <line
           x1={sx(cutoffSec)}
           y1={PAD_T}
@@ -304,6 +329,16 @@ export function PaceChart({
           stroke="currentColor"
           opacity="0.18"
         />
+        <text
+          x={sx(cutoffSec) + 2}
+          y={PAD_T + 9}
+          textAnchor="start"
+          fontSize="8"
+          fill="currentColor"
+          opacity="0.6"
+        >
+          24h cutoff
+        </text>
 
         {/* Goal horizontal */}
         <line
@@ -339,7 +374,8 @@ export function PaceChart({
           />
         )}
 
-        {/* Actual series — one <line> per pit/lap segment, colored by paceStatus at segment end. */}
+        {/* Actual series — one <line> per lap/pit segment, colored by paceStatus at segment end.
+            Solid = lap running (start → finish). Dashed = pit (finish → next start). */}
         {segments.map((seg, i) => {
           const stroke = seg.status ? STATUS_STROKE[seg.status] : "currentColor";
           const statusLabel = seg.status === "green"
@@ -423,11 +459,11 @@ export function PaceChart({
         </g>
       </svg>
       <p className="px-2 pt-1 text-[11px] opacity-60 leading-snug">
-        Solid segments: laps. Dashed segments: pit stops. Color reflects
-        whether the projected finish is hitting the goal at that point.
-        Thin diagonals show the minimum pace to hit the goal — the upper
-        line is finishing exactly at race end, the lower line is starting
-        the final lap by cutoff.
+        Solid segments: laps (start → finish). Dashed segments: pits
+        (finish → next start). Color reflects whether the projected
+        finish is hitting the goal at that point. Thin diagonals show
+        the minimum pace to hit the goal — upper line is finishing
+        exactly at race end, lower is starting the final lap by cutoff.
       </p>
     </div>
   );

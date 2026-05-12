@@ -3,12 +3,19 @@
 import { useEffect } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
+import { useSelectedYear } from "@/hooks/useSelectedYear";
 import { syncBibLaps, syncBibLapsFromPassings } from "@/lib/lapSync";
 import type { PassingsResponse } from "@/lib/types";
 import { useOverallFeed } from "./FeedProvider";
 
 export function LapSyncProvider({ children }: { children: React.ReactNode }) {
-  const followed = useLiveQuery(() => db.followed.toArray(), []);
+  const [year] = useSelectedYear();
+  // Only sync/warm the athletes for the currently-selected race year —
+  // other years' follows stay in the DB but don't churn the network.
+  const followed = useLiveQuery(
+    () => db.followed.where("year").equals(year).toArray(),
+    [year],
+  );
   const { data } = useOverallFeed();
 
   useEffect(() => {
@@ -35,7 +42,10 @@ export function LapSyncProvider({ children }: { children: React.ReactNode }) {
         .map(async (a) => {
           if (cancelled) return;
           try {
-            const res = await fetch(`/api/passings/${a.bib}`, { cache: "no-store" });
+            const res = await fetch(
+              `/api/passings/${a.bib}?year=${year}`,
+              { cache: "no-store" },
+            );
             if (!res.ok) return;
             const body = (await res.json()) as PassingsResponse;
             if (cancelled) return;

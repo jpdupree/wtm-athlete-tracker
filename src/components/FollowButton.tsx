@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
+import { useSelectedYear } from "@/hooks/useSelectedYear";
 import type { Athlete, FeedResponse } from "@/lib/types";
 
 async function resolveGender(bib: number): Promise<"M" | "F" | null> {
@@ -20,7 +21,12 @@ async function resolveGender(bib: number): Promise<"M" | "F" | null> {
 }
 
 export function FollowButton({ row }: { row: Athlete }) {
-  const followed = useLiveQuery(() => db.followed.get(row.bib), [row.bib]);
+  const [year] = useSelectedYear();
+  const existing = useLiveQuery(() => db.followed.get(row.bib), [row.bib]);
+  // Only count as "following" if the record is for the current year. A
+  // record for a different year (same bib, different athlete) reads as
+  // not-following — the follow click will overwrite.
+  const followed = existing && existing.year === year ? existing : undefined;
   const [busy, setBusy] = useState(false);
 
   if (followed) {
@@ -39,8 +45,11 @@ export function FollowButton({ row }: { row: Athlete }) {
         try {
           const isTeam = row.category === "Team";
           const gender = isTeam ? null : await resolveGender(row.bib);
-          await db.followed.add({
+          // put() upserts — if a record exists for this bib in a different
+          // year, this replaces it. Acceptable: each bib follows one year.
+          await db.followed.put({
             bib: row.bib,
+            year,
             name: row.name,
             gender,
             team: isTeam ? row.category : null,

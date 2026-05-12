@@ -2,9 +2,10 @@
 
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
+import { useSelectedYear } from "@/hooks/useSelectedYear";
 import { fmtCountdown, fmtSec, fmtVenueClock } from "@/lib/format";
 import { predict } from "@/lib/predict";
-import { RACE_START } from "@/lib/race";
+import { raceTimingFor } from "@/lib/race";
 
 export function FinishPrediction({
   bib,
@@ -17,6 +18,8 @@ export function FinishPrediction({
   laps: number;
   goalMiles: number | null;
 }) {
+  const [year] = useSelectedYear();
+  const { start: raceStart, venueTz } = raceTimingFor(year);
   const lapRows = useLiveQuery(
     () => db.laps.where("bib").equals(bib).sortBy("lapNumber"),
     [bib],
@@ -25,7 +28,7 @@ export function FinishPrediction({
   // Wall-clock per lap (pit + running) derived from lapCompletedAt deltas.
   // Trailing avg of these is more honest about fading pace than totalSec/laps.
   const lapDurations: number[] = [];
-  let prevEndMs = RACE_START.getTime();
+  let prevEndMs = raceStart.getTime();
   for (const l of lapRows ?? []) {
     if (!l.lapCompletedAt) continue;
     const endMs = new Date(l.lapCompletedAt).getTime();
@@ -84,8 +87,8 @@ export function FinishPrediction({
       </p>
       <p className="text-xs opacity-80 tabular-nums">
         {onPace
-          ? `Finishes ~${fmtVenueClock(p.predictedFinish)} · ${fmtCountdown(p.marginMs)} to spare`
-          : `Would finish ~${fmtVenueClock(p.predictedFinish)} · ${fmtCountdown(-p.marginMs)} past race end`}
+          ? `Finishes ~${fmtVenueClock(p.predictedFinish, venueTz)} · ${fmtCountdown(p.marginMs)} to spare`
+          : `Would finish ~${fmtVenueClock(p.predictedFinish, venueTz)} · ${fmtCountdown(-p.marginMs)} past race end`}
       </p>
       <p className="text-[11px] opacity-60 tabular-nums">
         {p.remainingLaps} laps to go · {fmtSec(Math.round(p.avgLapSec))}/lap ({paceLabel})
