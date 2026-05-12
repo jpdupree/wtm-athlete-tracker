@@ -108,7 +108,7 @@ export default function AthleteDetailPage({
           <span style={{ color: "var(--wtm-accent)" }}>←</span> Home
         </Link>
         <div className="flex items-center gap-2">
-          {isFollowed && followedResolved && (
+          {isFollowed && followedResolved && !raceOver && (
             <PauseToggle
               bib={followedResolved.bib}
               paused={!!followedResolved.paused}
