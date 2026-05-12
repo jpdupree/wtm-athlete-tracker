@@ -4,7 +4,9 @@ import Link from "next/link";
 import { FollowedList } from "@/components/FollowedList";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { YearPicker } from "@/components/YearPicker";
+import { useNow } from "@/hooks/useNow";
 import { useSelectedYear } from "@/hooks/useSelectedYear";
+import { raceTimingFor } from "@/lib/race";
 import { configFor, liveResultsUrlFor } from "@/lib/years";
 
 const SOCIAL = [
@@ -17,6 +19,12 @@ export default function HomePage() {
   const [year] = useSelectedYear();
   const yearConfig = configFor(year);
   const liveUrl = liveResultsUrlFor(year);
+  // Course view is a live-race-day tool (current position on a course
+  // that no longer exists for past events), so hide it once the
+  // selected year's race has ended. Updated once per minute so it
+  // appears/disappears at the right moment without a reload.
+  const now = useNow(60_000);
+  const raceEnded = now >= raceTimingFor(year).end.getTime();
 
   const links: Array<{ label: string; sub: string; href: string | null }> = [
     {
@@ -99,16 +107,18 @@ export default function HomePage() {
         Pace calculator
       </Link>
 
-      <Link
-        href="/map"
-        className="block rounded-md px-4 py-3 text-center text-sm font-semibold uppercase tracking-wider transition-colors"
-        style={{
-          border: "1px solid var(--wtm-border-strong)",
-          background: "var(--wtm-surface)",
-        }}
-      >
-        Course view
-      </Link>
+      {!raceEnded && (
+        <Link
+          href="/map"
+          className="block rounded-md px-4 py-3 text-center text-sm font-semibold uppercase tracking-wider transition-colors"
+          style={{
+            border: "1px solid var(--wtm-border-strong)",
+            background: "var(--wtm-surface)",
+          }}
+        >
+          Course view
+        </Link>
+      )}
 
       <a
         href="https://toughmudder.com/events/worlds-toughest-mudder"
