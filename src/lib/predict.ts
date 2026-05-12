@@ -162,6 +162,37 @@ export type PaceStatus = "green" | "amber" | "red";
 // Comfortable buffer over the race-end cutoff. Tight finishes flip amber.
 export const PACE_BUFFER_MS = 30 * 60 * 1000;
 
+// Naive on-pace check: at the elapsed time, where SHOULD the athlete be
+// if they were tracking the required goal pace exactly? If they're at
+// or ahead of that mileage mark they read green; if they're trailing,
+// amber within ~30min and red beyond.
+//
+// This sits next to the goal-pace diagonal on the chart — segments
+// above the diagonal go green here, below go red. The fade-aware
+// predict() / paceStatus() lives on for the headline "On pace to hit
+// goal" card, where its conservatism is more useful than confusing.
+export function naivePaceStatus(opts: {
+  elapsedSec: number;
+  milesDone: number;
+  goalMiles: number | null;
+  raceWindowSec?: number;
+}): PaceStatus | null {
+  if (opts.goalMiles == null || opts.milesDone <= 0 || opts.elapsedSec <= 0) {
+    return null;
+  }
+  if (opts.milesDone >= opts.goalMiles) return "green";
+  const window = opts.raceWindowSec ?? 25.5 * 3600;
+  const requiredMiles = (opts.goalMiles / window) * opts.elapsedSec;
+  const leadMiles = opts.milesDone - requiredMiles;
+  // Convert lead miles to a time buffer at goal pace, so the amber
+  // threshold matches the same 30-min "tight finish" feeling as the
+  // fade-aware paceStatus.
+  const leadSec = leadMiles * (window / opts.goalMiles);
+  if (leadSec >= PACE_BUFFER_MS / 1000) return "green";
+  if (leadSec >= -PACE_BUFFER_MS / 1000) return "amber";
+  return "red";
+}
+
 // Classify a (totalSec, laps) snapshot relative to the goal: would the
 // athlete hit goal-miles before race end, and with how much margin?
 //   green: on pace with >= 30min margin (or already at goal)

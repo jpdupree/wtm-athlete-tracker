@@ -5,7 +5,7 @@ import { db, type Lap } from "@/lib/db";
 import { useNow } from "@/hooks/useNow";
 import { useSelectedYear } from "@/hooks/useSelectedYear";
 import { LAP_MILES, raceTimingFor } from "@/lib/race";
-import { fadeFactor, paceStatus, type PaceStatus } from "@/lib/predict";
+import { fadeFactor, naivePaceStatus, type PaceStatus } from "@/lib/predict";
 
 const W = 320;
 const H = 220;
@@ -106,15 +106,16 @@ export function PaceChart({
     const lapEndY = n * LAP_MILES;
     const prevY = (n - 1) * LAP_MILES;
 
-    const priorDurs = lapDurations.slice();
     const thisLapDur = lapEndSec - prevEndSecForDur;
-    const throughThis = [...priorDurs, thisLapDur];
 
-    const statusAtLapEnd = paceStatus({
-      totalSec: lapEndSec,
-      laps: n,
+    // Segment color = naive on-pace check at this lap end: is the
+    // athlete above the required-pace diagonal at this elapsed time?
+    // (The fade-aware projection lives on the FinishPrediction card.)
+    const statusAtLapEnd = naivePaceStatus({
+      elapsedSec: lapEndSec,
+      milesDone: lapEndY,
       goalMiles,
-      lapSecs: throughThis,
+      raceWindowSec: windowSec,
     });
 
     const hasLapStart = !!lap.lapStartedAt;

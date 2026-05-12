@@ -6,8 +6,8 @@ import { db, type FuelEntry, type Note } from "@/lib/db";
 import { lapId, markLapManual } from "@/lib/lapSync";
 import { fmtSec, fmtVenueClock } from "@/lib/format";
 import { pitStatus, pitStatusClass, pitStatusLabel } from "@/lib/intake";
-import { paceStatus, type PaceStatus } from "@/lib/predict";
-import { raceTimingFor } from "@/lib/race";
+import { naivePaceStatus, type PaceStatus } from "@/lib/predict";
+import { LAP_MILES, raceTimingFor } from "@/lib/race";
 import { useEffectivePitSec } from "@/hooks/useEffectivePitSec";
 import { useSelectedYear } from "@/hooks/useSelectedYear";
 
@@ -89,13 +89,14 @@ export function LapCard({
   const totalSecAtLapEnd = completedAt
     ? (new Date(completedAt).getTime() - raceStartForTiming.getTime()) / 1000
     : null;
+  // Naive on-pace check at this lap end — matches the chart segment
+  // color, which compares actual position to the required-pace diagonal.
   const goalStatus: PaceStatus | null =
     totalSecAtLapEnd != null && followed?.goalMiles != null
-      ? paceStatus({
-          totalSec: totalSecAtLapEnd,
-          laps: lapNumber,
+      ? naivePaceStatus({
+          elapsedSec: totalSecAtLapEnd,
+          milesDone: lapNumber * LAP_MILES,
           goalMiles: followed.goalMiles,
-          lapSecs: lapDurations,
         })
       : null;
 
