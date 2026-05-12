@@ -29,14 +29,17 @@ export default function HomePage() {
       sub: "theocrreport.com",
       href: "https://theocrreport.com/",
     },
-    {
-      // Year-specific YouTube stream: race-day live for the current year,
-      // recorded broadcast for past years. Falls back to null + "link
-      // pending" when that year's URL hasn't been filled in yet.
-      label: "Live race feed",
-      sub: `${year} broadcast`,
-      href: yearConfig.liveStreamUrl,
-    },
+    // Year-specific YouTube stream: race-day live for the current year,
+    // recorded broadcast for past years. Years with no known stream URL
+    // (2021 — pre-broadcast era) drop the row entirely rather than show
+    // a permanent "link pending" placeholder.
+    ...(yearConfig.liveStreamUrl
+      ? [{
+          label: "Live race feed",
+          sub: `${year} broadcast`,
+          href: yearConfig.liveStreamUrl,
+        }]
+      : []),
   ];
 
   return (
