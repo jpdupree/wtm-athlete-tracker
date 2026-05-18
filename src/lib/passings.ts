@@ -1,6 +1,8 @@
 import { getAllPassings } from "./fixtures";
 import { kvGet, kvSet } from "./kv";
 import { raceTimingFor } from "./race";
+import { livePassings } from "./raceResultLive";
+import { liveFeedYear } from "./years";
 import type { Passing, RawPassing } from "./types";
 
 const FRESH_MS = 15_000;
@@ -62,9 +64,17 @@ function normalizePassing(r: RawPassing, raceStart: Date): Passing | null {
 }
 
 async function fetchAllPassings(year: number): Promise<Passing[]> {
+  const isLiveYear = liveFeedYear() === year;
+
+  // Preferred live path: RACE_FEED_EVENT — the adapter pulls the lap-detail
+  // lists from the RaceResult event directly.
+  const liveEvent = process.env.RACE_FEED_EVENT;
+  if (liveEvent && isLiveYear) {
+    return livePassings(liveEvent, year);
+  }
+
+  // Legacy: a URL returning normalized RawPassing JSON.
   const url = process.env.RACE_FEED_PASSINGS;
-  const liveYear = parseInt(process.env.RACE_FEED_YEAR ?? "", 10);
-  const isLiveYear = Number.isFinite(liveYear) ? year === liveYear : true;
   if (url && isLiveYear) {
     const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) throw new Error(`passings upstream: ${res.status}`);

@@ -1,6 +1,8 @@
 import { getAthletesBySlice } from "./fixtures";
 import { kvGet, kvSet } from "./kv";
 import { raceTimingFor } from "./race";
+import { liveAthletes } from "./raceResultLive";
+import { liveFeedYear } from "./years";
 import type { Athlete, FeedResponse, RawAthleteRow, Slice } from "./types";
 
 const FRESH_MS = 15_000;
@@ -84,11 +86,20 @@ function normalizeRow(
 }
 
 async function fetchSlice(slice: Slice, year: number): Promise<Athlete[]> {
-  // Upstream URLs are only configured for the live year. For any other
-  // year, fall back to the per-year fixture CSVs.
+  const isLiveYear = liveFeedYear() === year;
+
+  // Preferred live path: RACE_FEED_EVENT points at a RaceResult event id.
+  // The adapter fetches the RRPublish lists directly and maps them, so
+  // race day is just an env-var swap. Used only for the configured
+  // live year.
+  const liveEvent = process.env.RACE_FEED_EVENT;
+  if (liveEvent && isLiveYear) {
+    return liveAthletes(liveEvent, slice, year);
+  }
+
+  // Legacy: a per-slice URL that already returns normalized RawAthleteRow
+  // JSON. Kept for a custom upstream/adapter; only applies to the live year.
   const url = process.env[ENV_BY_SLICE[slice]];
-  const liveYear = parseInt(process.env.RACE_FEED_YEAR ?? "", 10);
-  const isLiveYear = Number.isFinite(liveYear) ? year === liveYear : true;
   if (url && isLiveYear) {
     const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) throw new Error(`upstream ${slice}: ${res.status}`);
@@ -96,7 +107,8 @@ async function fetchSlice(slice: Slice, year: number): Promise<Athlete[]> {
     const raceStart = raceTimingFor(year).start;
     return raw.map((r) => normalizeRow(r, GENDER_BY_SLICE[slice], raceStart));
   }
-  // Fixture path: CSVs already pre-split by gender, with team chips on the
+
+  // Fixture path: per-year CSVs pre-split by gender, team chips on the
   // teams slice. getAthletesBySlice returns Athlete[] directly.
   return getAthletesBySlice(slice, year);
 }

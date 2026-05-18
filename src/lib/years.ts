@@ -73,6 +73,23 @@ export function configFor(year: number): YearConfig {
   return YEARS.find((y) => y.year === year) ?? YEARS.find((y) => y.year === DEFAULT_YEAR)!;
 }
 
+// The year currently wired to the live RaceResult feed, if any.
+// NEXT_PUBLIC_ so the value reaches the client (useFeed's data gate) as
+// well as the server (raceFeed / passings). Race day = set this to the
+// new year alongside RACE_FEED_EVENT.
+export function liveFeedYear(): number | null {
+  const raw = process.env.NEXT_PUBLIC_RACE_FEED_YEAR;
+  const n = raw ? parseInt(raw, 10) : NaN;
+  return Number.isFinite(n) ? n : null;
+}
+
+// Whether a year should fetch athlete data: either it has bundled
+// fixtures, or it's the live feed year (served from the RaceResult
+// adapter even without fixtures).
+export function yearHasData(year: number): boolean {
+  return configFor(year).hasData || liveFeedYear() === year;
+}
+
 export function liveResultsUrlFor(year: number): string | null {
   const c = configFor(year);
   return c.eventId ? `https://my.raceresult.com/${c.eventId}/` : null;

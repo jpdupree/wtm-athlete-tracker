@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { configFor } from "@/lib/years";
+import { yearHasData } from "@/lib/years";
 import type { FeedResponse, Slice } from "@/lib/types";
 
 const POLL_MS = 15_000;
@@ -19,7 +19,7 @@ export function useFeed(slice: Slice, year: number): UseFeedResult {
   const [data, setData] = useState<FeedResponse | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [loading, setLoading] = useState(true);
-  const hasData = configFor(year).hasData;
+  const hasData = yearHasData(year);
 
   useEffect(() => {
     // PER-RUN cancellation flag — captured by every closure inside this

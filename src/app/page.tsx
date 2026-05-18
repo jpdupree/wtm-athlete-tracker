@@ -7,7 +7,7 @@ import { YearPicker } from "@/components/YearPicker";
 import { useNow } from "@/hooks/useNow";
 import { useSelectedYear } from "@/hooks/useSelectedYear";
 import { raceTimingFor } from "@/lib/race";
-import { configFor, liveResultsUrlFor } from "@/lib/years";
+import { configFor, liveResultsUrlFor, yearHasData } from "@/lib/years";
 
 const SOCIAL = [
   { label: "Facebook", href: "https://www.facebook.com/theocrreport", icon: FacebookIcon },
@@ -79,7 +79,7 @@ export default function HomePage() {
         <YearPicker />
       </header>
 
-      {!yearConfig.hasData && (
+      {!yearHasData(year) && (
         <p
           className="rounded-md px-3 py-2 text-xs"
           style={{
