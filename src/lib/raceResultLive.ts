@@ -51,18 +51,44 @@ function findList(lists: RRConfigList[], patterns: string[]): RRConfigList | nul
   return null;
 }
 
+// Short-lived cache of raw list responses, keyed by event+list+contest.
+// The men / women / overall slices each fetch the SAME "solo results"
+// list, and they're all requested within the same polling burst — this
+// dedupes that to one RaceResult request per list per ~10s window
+// instead of three. In-flight promises are cached too, so concurrent
+// slice requests share a single network call rather than racing.
+const LIST_TTL_MS = 10_000;
+const listCache = new Map<string, { at: number; promise: Promise<RRListResp> }>();
+
 async function fetchList(
   eventId: string,
   key: string,
   list: RRConfigList,
 ): Promise<RRListResp> {
+  const cacheKey = `${eventId}|${list.Name}|${list.Contest}`;
+  const hit = listCache.get(cacheKey);
+  if (hit && Date.now() - hit.at < LIST_TTL_MS) return hit.promise;
+
   const url =
     `${RR_BASE}/${eventId}/RRPublish/data/list?key=${encodeURIComponent(key)}` +
     `&listname=${encodeURIComponent(list.Name)}&page=results` +
     `&contest=${list.Contest}&r=all&l=0`;
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) throw new Error(`RaceResult list "${list.Name}": HTTP ${res.status}`);
-  return (await res.json()) as RRListResp;
+  const promise = (async () => {
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) {
+      throw new Error(`RaceResult list "${list.Name}": HTTP ${res.status}`);
+    }
+    return (await res.json()) as RRListResp;
+  })();
+  // Cache the promise immediately so a concurrent caller within the same
+  // tick reuses it. On failure, evict so the next call retries instead
+  // of serving a rejected promise for the whole TTL.
+  listCache.set(cacheKey, { at: Date.now(), promise });
+  promise.catch(() => {
+    const cur = listCache.get(cacheKey);
+    if (cur && cur.promise === promise) listCache.delete(cacheKey);
+  });
+  return promise;
 }
 
 // ---- field → column mapping ------------------------------------------------
