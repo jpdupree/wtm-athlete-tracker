@@ -48,6 +48,11 @@ export default function HomePage() {
           href: yearConfig.liveStreamUrl,
         }]
       : []),
+    {
+      label: "The Event",
+      sub: "World's Toughest Mudder · toughmudder.com",
+      href: "https://toughmudder.com/events/worlds-toughest-mudder",
+    },
   ];
 
   return (
@@ -119,36 +124,6 @@ export default function HomePage() {
       >
         Pace calculator
       </Link>
-
-      <a
-        href="https://toughmudder.com/events/worlds-toughest-mudder"
-        target="_blank"
-        rel="noreferrer"
-        className="flex items-center justify-between rounded-md px-4 py-3 transition-colors"
-        style={{
-          border: "1px solid var(--wtm-accent)",
-          background: "var(--wtm-accent-dim)",
-        }}
-      >
-        <span>
-          <p
-            className="wtm-display text-xl leading-none"
-            style={{ color: "var(--wtm-accent)" }}
-          >
-            The Event
-          </p>
-          <p className="text-[11px] opacity-70 mt-1">
-            World&apos;s Toughest Mudder · toughmudder.com
-          </p>
-        </span>
-        <span
-          aria-hidden
-          className="text-sm font-bold"
-          style={{ color: "var(--wtm-accent)" }}
-        >
-          ↗
-        </span>
-      </a>
 
       <nav className="space-y-2">
         <p className="text-[10px] uppercase tracking-[0.18em] opacity-50 pl-1">
