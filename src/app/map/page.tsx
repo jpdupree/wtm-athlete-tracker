@@ -39,8 +39,9 @@ export default function MapPage() {
       >
         <h1 className="wtm-display text-3xl leading-none">Course view</h1>
         <p className="text-xs opacity-60 leading-snug">
-          Predicted position by lap fraction. A real map lands once Tough
-          Mudder shares GPX for the course.
+          A live estimate of how far each of your athletes is through their
+          current lap, based on their recent pace. A full course map is
+          coming soon.
         </p>
       </header>
 
