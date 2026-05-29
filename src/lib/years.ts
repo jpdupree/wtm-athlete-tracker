@@ -64,7 +64,7 @@ export const YEARS: YearConfig[] = [
     venue: "Belvoir Castle",
     hasData: true,
   },
-  { year: 2026, eventId: null, liveStreamUrl: "https://www.youtube.com/@theocrreport/live", venue: "TBA", hasData: false },
+  { year: 2026, eventId: null, liveStreamUrl: "https://www.youtube.com/playlist?list=PLyK0g0eIg3RV948Mr1zWCye6wvIGVF7qM", venue: "TBA", hasData: false },
 ];
 
 export const DEFAULT_YEAR = 2025;
