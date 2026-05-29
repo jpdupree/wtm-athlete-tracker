@@ -26,7 +26,18 @@ export default function HomePage() {
   const now = useNow(60_000);
   const raceEnded = now >= raceTimingFor(year).end.getTime();
 
-  const links: Array<{ label: string; sub: string; href: string | null }> = [
+  const links: Array<{
+    label: string;
+    sub: string;
+    href: string | null;
+    accent?: boolean;
+  }> = [
+    {
+      label: "The Event",
+      sub: "World's Toughest Mudder · toughmudder.com",
+      href: "https://toughmudder.com/events/worlds-toughest-mudder",
+      accent: true,
+    },
     {
       label: "Live results",
       sub: `World's Toughest Mudder ${year}`,
@@ -48,11 +59,6 @@ export default function HomePage() {
           href: yearConfig.liveStreamUrl,
         }]
       : []),
-    {
-      label: "The Event",
-      sub: "World's Toughest Mudder · toughmudder.com",
-      href: "https://toughmudder.com/events/worlds-toughest-mudder",
-    },
   ];
 
   return (
@@ -134,10 +140,13 @@ export default function HomePage() {
           const content = (
             <>
               <span>
-                <p className="text-sm font-semibold uppercase tracking-wide">
+                <p
+                  className="text-sm font-semibold uppercase tracking-wide"
+                  style={l.accent ? { color: "var(--wtm-accent)" } : undefined}
+                >
                   {l.label}
                 </p>
-                <p className="text-[11px] opacity-50">
+                <p className={`text-[11px] ${l.accent ? "opacity-70" : "opacity-50"}`}>
                   {l.sub}
                   {disabled && " (link pending)"}
                 </p>
@@ -152,8 +161,12 @@ export default function HomePage() {
             </>
           );
           const baseStyle = {
-            border: "1px solid var(--wtm-border)",
-            background: "var(--wtm-surface)",
+            border: l.accent
+              ? "1px solid var(--wtm-accent)"
+              : "1px solid var(--wtm-border)",
+            background: l.accent
+              ? "var(--wtm-accent-dim)"
+              : "var(--wtm-surface)",
             opacity: disabled ? 0.55 : 1,
           };
           if (!l.href) {
