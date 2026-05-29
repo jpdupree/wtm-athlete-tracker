@@ -95,18 +95,6 @@ export default function HomePage() {
 
       <FollowedList />
 
-      <Link
-        href="/pace"
-        className="block rounded-md px-4 py-3 text-center text-sm font-semibold uppercase tracking-wider transition-colors"
-        style={{
-          border: "1px solid var(--wtm-accent)",
-          color: "var(--wtm-accent)",
-          background: "transparent",
-        }}
-      >
-        Pace calculator
-      </Link>
-
       {!raceEnded && (
         <Link
           href="/map"
@@ -119,6 +107,18 @@ export default function HomePage() {
           Course view
         </Link>
       )}
+
+      <Link
+        href="/pace"
+        className="block rounded-md px-4 py-3 text-center text-sm font-semibold uppercase tracking-wider transition-colors"
+        style={{
+          border: "1px solid var(--wtm-accent)",
+          color: "var(--wtm-accent)",
+          background: "transparent",
+        }}
+      >
+        Pace calculator
+      </Link>
 
       <a
         href="https://toughmudder.com/events/worlds-toughest-mudder"
