@@ -91,17 +91,23 @@ export default function HomePage() {
       </header>
 
       {!yearHasData(year) && (
-        <p
-          className="rounded-md px-3 py-2 text-xs"
+        <div
+          className="rounded-md px-4 py-3 space-y-1"
           style={{
             border: "1px solid var(--wtm-accent)",
             background: "var(--wtm-accent-dim)",
           }}
         >
-          Data for {year} isn&apos;t wired up yet — followed list and the
-          calculator still work, but live athlete data will be empty.
-          {liveUrl == null && " The live-results link is also pending the event id."}
-        </p>
+          <p className="text-sm font-semibold" style={{ color: "var(--wtm-accent)" }}>
+            Results go live on race day
+          </p>
+          <p className="text-xs opacity-80 leading-snug">
+            World&apos;s Toughest Mudder {year} hasn&apos;t started yet. Live
+            standings and athlete tracking will appear here once the race
+            begins. Until then, pick a past year above to explore, or open
+            the pace calculator to plan a goal.
+          </p>
+        </div>
       )}
 
       <FollowedList />
