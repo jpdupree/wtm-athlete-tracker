@@ -242,11 +242,17 @@ export default function HomePage() {
   );
 }
 
-// Theme-paired logo. CSS in globals.css swaps which one is visible based
-// on the html[data-theme] attribute.
+// Theme-paired logo, linked back to the main site. CSS in globals.css
+// swaps which image is visible based on the html[data-theme] attribute.
 function BrandMark() {
   return (
-    <div className="flex flex-col items-center select-none">
+    <a
+      href="https://theocrreport.com/"
+      target="_blank"
+      rel="noreferrer"
+      aria-label="The OCR Report — theocrreport.com"
+      className="flex flex-col items-center select-none transition-opacity hover:opacity-80"
+    >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="/logo-light.png"
@@ -265,7 +271,7 @@ function BrandMark() {
         className="wtm-logo-dark h-20 w-auto"
         loading="lazy"
       />
-    </div>
+    </a>
   );
 }
 
