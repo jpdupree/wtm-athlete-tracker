@@ -83,11 +83,25 @@ export function liveFeedYear(): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-// Whether a year should fetch athlete data: either it has bundled
-// fixtures, or it's the live feed year (served from the RaceResult
-// adapter even without fixtures).
+// Years that ship a pre-race start-list seed (src/data/startlist-<year>.json).
+// Kept as a static list here — rather than importing the seed module — so
+// years.ts (used widely on the client) doesn't pull the large roster JSON
+// into the client bundle. The roster reaches the client via the API.
+const STARTLIST_YEARS = new Set<number>([2026]);
+
+export function yearHasStartlist(year: number): boolean {
+  return STARTLIST_YEARS.has(year);
+}
+
+// Whether a year should fetch athlete data: it has bundled fixtures, is the
+// live feed year (served from the RaceResult adapter), or ships a pre-race
+// start-list seed so people can follow before the feed switches on.
 export function yearHasData(year: number): boolean {
-  return configFor(year).hasData || liveFeedYear() === year;
+  return (
+    configFor(year).hasData ||
+    liveFeedYear() === year ||
+    yearHasStartlist(year)
+  );
 }
 
 export function liveResultsUrlFor(year: number): string | null {
