@@ -2,6 +2,7 @@ import { getAthletesBySlice } from "./fixtures";
 import { kvGet, kvSet } from "./kv";
 import { raceTimingFor } from "./race";
 import { liveAthletes } from "./raceResultLive";
+import { startlistForSlice } from "./startlist";
 import { liveFeedYear } from "./years";
 import type { Athlete, FeedResponse, RawAthleteRow, Slice } from "./types";
 
@@ -107,6 +108,13 @@ async function fetchSlice(slice: Slice, year: number): Promise<Athlete[]> {
     const raceStart = raceTimingFor(year).start;
     return raw.map((r) => normalizeRow(r, GENDER_BY_SLICE[slice], raceStart));
   }
+
+  // Pre-race start-list seed. Only reached when the live path above is
+  // inactive (no RACE_FEED_EVENT for the live year yet), so a seeded year
+  // shows its roster pre-race and is replaced by live data the instant the
+  // env vars are set. Years without a seed fall through to fixtures.
+  const seeded = startlistForSlice(slice, year);
+  if (seeded) return seeded;
 
   // Fixture path: per-year CSVs pre-split by gender, team chips on the
   // teams slice. getAthletesBySlice returns Athlete[] directly.

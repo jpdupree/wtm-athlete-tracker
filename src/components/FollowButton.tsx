@@ -6,11 +6,14 @@ import { db } from "@/lib/db";
 import { useSelectedYear } from "@/hooks/useSelectedYear";
 import type { Athlete, FeedResponse } from "@/lib/types";
 
-async function resolveGender(bib: number): Promise<"M" | "F" | null> {
+// Fallback only — used when the row itself carries no gender (the overall
+// live slice doesn't). Scoped to the selected year so it matches the right
+// event's slices.
+async function resolveGender(bib: number, year: number): Promise<"M" | "F" | null> {
   try {
     const [men, women] = await Promise.all([
-      fetch("/api/results/men").then((r) => r.json() as Promise<FeedResponse>),
-      fetch("/api/results/women").then((r) => r.json() as Promise<FeedResponse>),
+      fetch(`/api/results/men?year=${year}`).then((r) => r.json() as Promise<FeedResponse>),
+      fetch(`/api/results/women?year=${year}`).then((r) => r.json() as Promise<FeedResponse>),
     ]);
     if (men.rows.some((r) => r.bib === bib)) return "M";
     if (women.rows.some((r) => r.bib === bib)) return "F";
@@ -44,7 +47,11 @@ export function FollowButton({ row }: { row: Athlete }) {
         setBusy(true);
         try {
           const isTeam = row.category === "Team";
-          const gender = isTeam ? null : await resolveGender(row.bib);
+          // The seed and the men/women slices already carry gender; only
+          // fall back to a slice lookup when the row has none (overall live).
+          const gender = isTeam
+            ? null
+            : row.gender ?? (await resolveGender(row.bib, year));
           // put() upserts — if a record exists for this bib in a different
           // year, this replaces it. Acceptable: each bib follows one year.
           await db.followed.put({
