@@ -1,7 +1,7 @@
 import { getAllPassings } from "./fixtures";
 import { kvGet, kvSet } from "./kv";
 import { raceTimingFor } from "./race";
-import { livePassings } from "./raceResultLive";
+import { liveBibPassings } from "./raceResultLive";
 import { liveFeedYear } from "./years";
 import type { Passing, RawPassing } from "./types";
 
@@ -66,13 +66,6 @@ function normalizePassing(r: RawPassing, raceStart: Date): Passing | null {
 async function fetchAllPassings(year: number): Promise<Passing[]> {
   const isLiveYear = liveFeedYear() === year;
 
-  // Preferred live path: RACE_FEED_EVENT — the adapter pulls the lap-detail
-  // lists from the RaceResult event directly.
-  const liveEvent = process.env.RACE_FEED_EVENT;
-  if (liveEvent && isLiveYear) {
-    return livePassings(liveEvent, year);
-  }
-
   // Legacy: a URL returning normalized RawPassing JSON.
   const url = process.env.RACE_FEED_PASSINGS;
   if (url && isLiveYear) {
@@ -100,6 +93,26 @@ export async function getPassingsForBib(
   synthetic: boolean;
   passings: Passing[];
 }> {
+  // Live path: the lap-detail endpoint is per-participant, so fetch just
+  // this bib's history (and cache per-bib). A failure here returns a 502 for
+  // /api/passings/[bib] only — the summary feed (laps/total) is independent.
+  const liveEvent = process.env.RACE_FEED_EVENT;
+  if (liveEvent && liveFeedYear() === year) {
+    const bibKey = `passings:${year}:bib:${bib}`;
+    const t = Date.now();
+    const hit = await kvGet<CachePayload>(bibKey);
+    if (hit) {
+      const age = t - new Date(hit.fetchedAt).getTime();
+      if (age < FRESH_MS) {
+        return { fetchedAt: hit.fetchedAt, cached: true, ageMs: age, synthetic: false, passings: hit.passings };
+      }
+    }
+    const passings = await liveBibPassings(liveEvent, year, bib);
+    const fetchedAt = new Date(t).toISOString();
+    await kvSet<CachePayload>(bibKey, { fetchedAt, passings });
+    return { fetchedAt, cached: false, ageMs: 0, synthetic: false, passings };
+  }
+
   const cacheKey = `passings:${year}:all`;
   const now = Date.now();
   let payload = await kvGet<CachePayload>(cacheKey);

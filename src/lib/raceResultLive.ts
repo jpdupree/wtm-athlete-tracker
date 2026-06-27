@@ -413,80 +413,117 @@ function parseNarrowLapRow(
   };
 }
 
-export async function livePassings(
+// The lap-detail list is published on its own page ("details0") and is
+// fetched PER PARTICIPANT by pid (not bib), e.g.:
+//   /<event>/details0/list?key=…&listname=Online|Lap Details&page=details0
+//     &r=pid&pid=331&contest=2
+// pid is the participant id carried as row[1] in the summary lists.
+const DETAILS_PAGE = process.env.RACE_FEED_DETAILS_PAGE || "details0";
+const DETAILS_LISTNAME = process.env.RACE_FEED_DETAILS_LISTNAME || "Online|Lap Details";
+
+// bib -> { pid, contest } built from the summary lists, cached briefly.
+let pidMapCache: {
+  eventId: string;
+  map: Map<number, { pid: string; contest: string }>;
+  at: number;
+} | null = null;
+
+async function getPidMap(
   eventId: string,
-  year: number,
-): Promise<Passing[]> {
+): Promise<Map<number, { pid: string; contest: string }>> {
+  if (
+    pidMapCache &&
+    pidMapCache.eventId === eventId &&
+    Date.now() - pidMapCache.at < 60_000
+  ) {
+    return pidMapCache.map;
+  }
   const cfg = await getConfig(eventId);
-  const raceStart = raceTimingFor(year).start;
-
-  // The lap-detail listname is referenced by each summary list's Details
-  // field. Pull every distinct (Details, Contest) pair.
-  const parents = [
+  const map = new Map<number, { pid: string; contest: string }>();
+  const lists = [
     findList(cfg.lists, ["RTM Results Web", "Solo Results", "Individual Results"]),
+    findList(cfg.lists, ["RTM Results Team Members", "Results Team Members", "Team Members"]),
     findList(cfg.lists, ["RTM Team Results", "Team Results"]),
-  ].filter((l): l is RRConfigList => l != null && !!l.Details);
-
-  const seen = new Set<string>();
-  // bib -> ordered { n, pitSec, lapSec }
-  const byBib = new Map<number, Array<{ n: number; pitSec: number; lapSec: number }>>();
-
-  for (const parent of parents) {
-    const detailKey = `${parent.Details}||${parent.Contest}`;
-    if (seen.has(detailKey)) continue;
-    seen.add(detailKey);
-    const resp = await fetchList(eventId, cfg.key, {
-      Name: parent.Details!,
-      Contest: parent.Contest,
-    });
-    const sections = flatten(resp.data);
-    // Detect format by sampling the first non-empty section.
-    let sampleWidth = 0;
-    for (const rows of Object.values(sections)) {
-      if (rows.length > 0) {
-        sampleWidth = rows[0].length;
-        break;
-      }
-    }
-    const narrow = sampleWidth > 0 && sampleWidth <= 8;
-    for (const rows of Object.values(sections)) {
-      if (narrow) {
-        for (const row of rows) {
-          const parsed = parseNarrowLapRow(row);
-          if (!parsed) continue;
-          const list = byBib.get(parsed.bib) ?? [];
-          list.push({ n: parsed.n, pitSec: parsed.pitSec, lapSec: parsed.lapSec });
-          byBib.set(parsed.bib, list);
-        }
-      } else {
-        for (const row of rows) {
-          if (row.length < 13) continue;
-          const bib = parseInt(String(row[0]), 10);
-          if (!Number.isFinite(bib)) continue;
-          byBib.set(bib, parseWideLapRow(row));
+  ].filter((l): l is RRConfigList => l != null);
+  for (const list of lists) {
+    const resp = await fetchList(eventId, cfg.key, list);
+    for (const rows of Object.values(flatten(resp.data))) {
+      for (const row of rows) {
+        const bib = parseInt(String(row[0]), 10);
+        const pid = String(row[1] ?? "").trim();
+        if (Number.isFinite(bib) && pid && !map.has(bib)) {
+          map.set(bib, { pid, contest: list.Contest });
         }
       }
     }
   }
+  pidMapCache = { eventId, map, at: Date.now() };
+  return map;
+}
+
+// Per-athlete lap history. The endpoint is per-pid, so this fetches just the
+// one bib's laps — which is exactly what /api/passings/[bib] needs.
+export async function liveBibPassings(
+  eventId: string,
+  year: number,
+  bib: number,
+): Promise<Passing[]> {
+  const map = await getPidMap(eventId);
+  const entry = map.get(bib);
+  if (!entry) return [];
+  const cfg = await getConfig(eventId);
+  const key = RR_KEY || cfg.key;
+  const url =
+    `${RR_BASE}/${eventId}/${encodeURIComponent(DETAILS_PAGE)}/list?key=${encodeURIComponent(key)}` +
+    `&listname=${encodeURIComponent(DETAILS_LISTNAME)}` +
+    `&page=${encodeURIComponent(DETAILS_PAGE)}` +
+    `&r=pid&pid=${encodeURIComponent(entry.pid)}` +
+    `&contest=${entry.contest}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`RaceResult lap details bib ${bib} (pid ${entry.pid}): HTTP ${res.status}`);
+  }
+  const resp = (await res.json()) as RRListResp;
+  const raceStart = raceTimingFor(year).start;
+  const sections = flatten(resp.data);
+
+  // Detect wide (one row, all laps) vs narrow (one row per lap).
+  let sampleWidth = 0;
+  for (const rows of Object.values(sections)) {
+    if (rows.length > 0) {
+      sampleWidth = rows[0].length;
+      break;
+    }
+  }
+  const narrow = sampleWidth > 0 && sampleWidth <= 8;
+
+  const laps: Array<{ n: number; pitSec: number; lapSec: number }> = [];
+  for (const rows of Object.values(sections)) {
+    for (const row of rows) {
+      if (narrow) {
+        // Single-participant response: every row is this athlete's lap.
+        const p = parseNarrowLapRow(row);
+        if (p) laps.push({ n: p.n, pitSec: p.pitSec, lapSec: p.lapSec });
+      } else {
+        laps.push(...parseWideLapRow(row));
+      }
+    }
+  }
+  laps.sort((a, b) => a.n - b.n);
 
   const passings: Passing[] = [];
-  for (const [bib, laps] of byBib) {
-    laps.sort((a, b) => a.n - b.n);
-    let elapsedSec = 0;
-    for (const lap of laps) {
-      if (!lap.n) continue;
-      elapsedSec += lap.pitSec + lap.lapSec;
-      passings.push({
-        bib,
-        lapNumber: lap.n,
-        elapsedSec,
-        completedAt: new Date(
-          raceStart.getTime() + elapsedSec * 1000,
-        ).toISOString(),
-        pitSec: lap.pitSec,
-        lapSec: lap.lapSec,
-      });
-    }
+  let elapsedSec = 0;
+  for (const lap of laps) {
+    if (!lap.n) continue;
+    elapsedSec += lap.pitSec + lap.lapSec;
+    passings.push({
+      bib,
+      lapNumber: lap.n,
+      elapsedSec,
+      completedAt: new Date(raceStart.getTime() + elapsedSec * 1000).toISOString(),
+      pitSec: lap.pitSec,
+      lapSec: lap.lapSec,
+    });
   }
   return passings;
 }
