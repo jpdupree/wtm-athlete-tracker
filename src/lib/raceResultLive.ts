@@ -16,6 +16,32 @@ import type { Athlete, Passing, Slice } from "./types";
 
 const RR_BASE = "https://my.raceresult.com";
 
+// RRPublish "page" name. Differs per event (the timing crew names it when
+// they publish). Override with RACE_FEED_PAGE when the event uses something
+// unusual; otherwise the adapter tries these common names in order and
+// remembers the one that works.
+const PAGE_CANDIDATES = [
+  process.env.RACE_FEED_PAGE,
+  "results",
+  "Results",
+  "live",
+  "Live",
+  "live_results",
+  "Live Results",
+  "result_lists",
+  "Result Lists",
+  "rtm_results_web",
+  // Some events publish under a numeric page id (the leading number in the
+  // public URL hash, e.g. my.raceresult.com/<ev>/#2_KEY → page "2").
+  "2",
+  "1",
+  "0",
+  "3",
+].filter((p): p is string => !!p);
+
+// The page name that last returned a valid config — fetchList reuses it.
+let resolvedPage = process.env.RACE_FEED_PAGE || "results";
+
 type RRField = { Expression?: string; Label?: string };
 type RRListResp = { list?: { Fields?: RRField[] }; data?: unknown };
 type RRConfigList = { Name: string; Contest: string; ShowAs?: string; Details?: string };
@@ -33,14 +59,23 @@ async function getConfig(eventId: string): Promise<RRConfig> {
   ) {
     return configCache.cfg;
   }
-  const res = await fetch(
-    `${RR_BASE}/${eventId}/RRPublish/data/config?page=results`,
-    { cache: "no-store" },
+  let lastStatus = 0;
+  for (const page of PAGE_CANDIDATES) {
+    const res = await fetch(
+      `${RR_BASE}/${eventId}/RRPublish/data/config?page=${encodeURIComponent(page)}`,
+      { cache: "no-store" },
+    );
+    if (res.ok) {
+      const cfg = (await res.json()) as RRConfig;
+      resolvedPage = page; // fetchList must use the SAME page
+      configCache = { eventId, cfg, at: Date.now() };
+      return cfg;
+    }
+    lastStatus = res.status;
+  }
+  throw new Error(
+    `RaceResult config: HTTP ${lastStatus} (tried pages: ${PAGE_CANDIDATES.join(", ")})`,
   );
-  if (!res.ok) throw new Error(`RaceResult config: HTTP ${res.status}`);
-  const cfg = (await res.json()) as RRConfig;
-  configCache = { eventId, cfg, at: Date.now() };
-  return cfg;
 }
 
 function findList(lists: RRConfigList[], patterns: string[]): RRConfigList | null {
@@ -71,7 +106,7 @@ async function fetchList(
 
   const url =
     `${RR_BASE}/${eventId}/RRPublish/data/list?key=${encodeURIComponent(key)}` +
-    `&listname=${encodeURIComponent(list.Name)}&page=results` +
+    `&listname=${encodeURIComponent(list.Name)}&page=${encodeURIComponent(resolvedPage)}` +
     `&contest=${list.Contest}&r=all&l=0`;
   const promise = (async () => {
     const res = await fetch(url, { cache: "no-store" });
