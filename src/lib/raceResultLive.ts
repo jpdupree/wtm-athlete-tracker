@@ -14,33 +14,19 @@
 import { raceTimingFor } from "./race";
 import type { Athlete, Passing, Slice } from "./types";
 
-const RR_BASE = "https://my.raceresult.com";
-
-// RRPublish "page" name. Differs per event (the timing crew names it when
-// they publish). Override with RACE_FEED_PAGE when the event uses something
-// unusual; otherwise the adapter tries these common names in order and
-// remembers the one that works.
-const PAGE_CANDIDATES = [
-  process.env.RACE_FEED_PAGE,
-  "results",
-  "Results",
-  "live",
-  "Live",
-  "live_results",
-  "Live Results",
-  "result_lists",
-  "Result Lists",
-  "rtm_results_web",
-  // Some events publish under a numeric page id (the leading number in the
-  // public URL hash, e.g. my.raceresult.com/<ev>/#2_KEY → page "2").
-  "2",
-  "1",
-  "0",
-  "3",
-].filter((p): p is string => !!p);
-
-// The page name that last returned a valid config — fetchList reuses it.
-let resolvedPage = process.env.RACE_FEED_PAGE || "results";
+// RaceResult "Online" results API. The public results page loads its data
+// from a sharded host (my1/my2/…), under /<event>/<page>/{config,list}.
+// Captured from a live request:
+//   https://my1.raceresult.com/406834/results/list?key=<KEY>&listname=Online|RTM Results Web&page=results&contest=2&r=all&l=0
+//
+// All three are env-overridable:
+//   RACE_FEED_HOST  e.g. my1.raceresult.com  (which shard the event is on)
+//   RACE_FEED_PAGE  the published page name in the path/query (e.g. results)
+//   RACE_FEED_KEY   the published-page read key (32-char hex)
+const RR_HOST = process.env.RACE_FEED_HOST || "my1.raceresult.com";
+const RR_BASE = `https://${RR_HOST}`;
+const RR_PAGE = process.env.RACE_FEED_PAGE || "results";
+const RR_KEY = process.env.RACE_FEED_KEY || "";
 
 type RRField = { Expression?: string; Label?: string };
 type RRListResp = { list?: { Fields?: RRField[] }; data?: unknown };
@@ -59,20 +45,15 @@ async function getConfig(eventId: string): Promise<RRConfig> {
   ) {
     return configCache.cfg;
   }
+  const base = `${RR_BASE}/${eventId}/${encodeURIComponent(RR_PAGE)}/config`;
+  // Try with the key first (public results pages are key-gated), then without.
+  const urls = RR_KEY ? [`${base}?key=${encodeURIComponent(RR_KEY)}`, base] : [base];
   let lastStatus = 0;
-  // "" = call the config endpoint with NO page param (RaceResult's default
-  // page), tried first; then the named/numeric candidates.
-  for (const page of ["", ...PAGE_CANDIDATES]) {
-    const url = page
-      ? `${RR_BASE}/${eventId}/RRPublish/data/config?page=${encodeURIComponent(page)}`
-      : `${RR_BASE}/${eventId}/RRPublish/data/config`;
+  for (const url of urls) {
     const res = await fetch(url, { cache: "no-store" });
     if (res.ok) {
       const cfg = (await res.json()) as RRConfig;
-      // Guard against a 200 that isn't a real config (some setups return an
-      // empty doc for the wrong page).
       if (cfg && Array.isArray(cfg.lists) && cfg.lists.length > 0) {
-        resolvedPage = page; // fetchList must use the SAME page
         configCache = { eventId, cfg, at: Date.now() };
         return cfg;
       }
@@ -80,7 +61,7 @@ async function getConfig(eventId: string): Promise<RRConfig> {
     lastStatus = res.status || lastStatus;
   }
   throw new Error(
-    `RaceResult config: HTTP ${lastStatus} (tried no-page + pages: ${PAGE_CANDIDATES.join(", ")})`,
+    `RaceResult config: HTTP ${lastStatus} @ ${base}${RR_KEY ? " (key set)" : " (no RACE_FEED_KEY)"}`,
   );
 }
 
@@ -110,10 +91,13 @@ async function fetchList(
   const hit = listCache.get(cacheKey);
   if (hit && Date.now() - hit.at < LIST_TTL_MS) return hit.promise;
 
+  // Prefer the env key (the published-page read key); fall back to the key
+  // the config returned.
+  const useKey = RR_KEY || key;
   const url =
-    `${RR_BASE}/${eventId}/RRPublish/data/list?key=${encodeURIComponent(key)}` +
+    `${RR_BASE}/${eventId}/${encodeURIComponent(RR_PAGE)}/list?key=${encodeURIComponent(useKey)}` +
     `&listname=${encodeURIComponent(list.Name)}` +
-    (resolvedPage ? `&page=${encodeURIComponent(resolvedPage)}` : "") +
+    `&page=${encodeURIComponent(RR_PAGE)}` +
     `&contest=${list.Contest}&r=all&l=0`;
   const promise = (async () => {
     const res = await fetch(url, { cache: "no-store" });
