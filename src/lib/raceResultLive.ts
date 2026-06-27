@@ -46,14 +46,23 @@ async function getConfig(eventId: string): Promise<RRConfig> {
     return configCache.cfg;
   }
   const base = `${RR_BASE}/${eventId}/${encodeURIComponent(RR_PAGE)}/config`;
-  // Try with the key first (public results pages are key-gated), then without.
+  // The config is public and returns its own read key + the published lists
+  // under TabConfig.Lists (older shape: Tab.Config.Lists). Try with the env
+  // key first if one is set, then plain.
   const urls = RR_KEY ? [`${base}?key=${encodeURIComponent(RR_KEY)}`, base] : [base];
   let lastStatus = 0;
   for (const url of urls) {
     const res = await fetch(url, { cache: "no-store" });
     if (res.ok) {
-      const cfg = (await res.json()) as RRConfig;
-      if (cfg && Array.isArray(cfg.lists) && cfg.lists.length > 0) {
+      const raw = (await res.json()) as {
+        key?: string;
+        TabConfig?: { Lists?: RRConfigList[] };
+        Tab?: { Config?: { Lists?: RRConfigList[] } };
+      };
+      const lists = raw?.TabConfig?.Lists ?? raw?.Tab?.Config?.Lists ?? [];
+      const key = RR_KEY || raw?.key || "";
+      if (key && Array.isArray(lists) && lists.length > 0) {
+        const cfg: RRConfig = { key, lists };
         configCache = { eventId, cfg, at: Date.now() };
         return cfg;
       }
@@ -61,7 +70,7 @@ async function getConfig(eventId: string): Promise<RRConfig> {
     lastStatus = res.status || lastStatus;
   }
   throw new Error(
-    `RaceResult config: HTTP ${lastStatus} @ ${base}${RR_KEY ? " (key set)" : " (no RACE_FEED_KEY)"}`,
+    `RaceResult config: HTTP ${lastStatus} @ ${base} (no key/lists found in response)`,
   );
 }
 
