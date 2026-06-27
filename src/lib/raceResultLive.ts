@@ -132,6 +132,10 @@ function mapField(f: RRField): string {
   const e = f.Expression ?? "";
   // Composite expressions first so embedded references don't mis-match.
   if (/LastSeenName/.test(e)) return "PointLastSeen";
+  // The displayed race bib (e.g. 1045) lives in a "SpartanBib" column — the
+  // hidden BIB/ID prefix (row[0]/row[1]) is RaceResult's internal transponder
+  // number + participant id, which nobody follows by.
+  if (/SpartanBib/i.test(e)) return "RaceBib";
   if (/^AUTORANK$/.test(e)) return "Rank";
   if (/^COUNTRY\.FLAG$/.test(e)) return "Country";
   if (/^COUNTRY\.IOCNAME$/.test(e)) return "CountryIOC";
@@ -282,7 +286,9 @@ function recToAthlete(
   const agRank =
     r.AgeGroupRank && r.AgeGroupRank !== "-" ? toInt(r.AgeGroupRank) || null : null;
   return {
-    bib: toInt(r.Bib),
+    // Prefer the displayed race bib (SpartanBib); fall back to the internal
+    // BIB column only if a race bib isn't present (e.g. team entities).
+    bib: toInt(r.RaceBib) || toInt(r.Bib),
     name: (category === "Team" ? r.Team || r.Name : r.Name) ?? "",
     category,
     nation: r.Country ?? "",
@@ -447,12 +453,17 @@ async function getPidMap(
   ].filter((l): l is RRConfigList => l != null);
   for (const list of lists) {
     const resp = await fetchList(eventId, cfg.key, list);
+    const headers = buildHeaders(resp.list?.Fields ?? []);
     for (const rows of Object.values(flatten(resp.data))) {
       for (const row of rows) {
-        const bib = parseInt(String(row[0]), 10);
+        const rec = rowToRec(row, headers);
+        // Key by the displayed race bib (SpartanBib) — that's what the app
+        // follows by — and look up the participant id (the hidden ID column,
+        // row[1]) which the lap-detail endpoint wants as pid.
+        const raceBib = toInt(rec.RaceBib) || toInt(rec.Bib);
         const pid = String(row[1] ?? "").trim();
-        if (Number.isFinite(bib) && pid && !map.has(bib)) {
-          map.set(bib, { pid, contest: list.Contest });
+        if (raceBib && pid && !map.has(raceBib)) {
+          map.set(raceBib, { pid, contest: list.Contest });
         }
       }
     }
