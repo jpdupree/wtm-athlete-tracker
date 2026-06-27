@@ -60,21 +60,27 @@ async function getConfig(eventId: string): Promise<RRConfig> {
     return configCache.cfg;
   }
   let lastStatus = 0;
-  for (const page of PAGE_CANDIDATES) {
-    const res = await fetch(
-      `${RR_BASE}/${eventId}/RRPublish/data/config?page=${encodeURIComponent(page)}`,
-      { cache: "no-store" },
-    );
+  // "" = call the config endpoint with NO page param (RaceResult's default
+  // page), tried first; then the named/numeric candidates.
+  for (const page of ["", ...PAGE_CANDIDATES]) {
+    const url = page
+      ? `${RR_BASE}/${eventId}/RRPublish/data/config?page=${encodeURIComponent(page)}`
+      : `${RR_BASE}/${eventId}/RRPublish/data/config`;
+    const res = await fetch(url, { cache: "no-store" });
     if (res.ok) {
       const cfg = (await res.json()) as RRConfig;
-      resolvedPage = page; // fetchList must use the SAME page
-      configCache = { eventId, cfg, at: Date.now() };
-      return cfg;
+      // Guard against a 200 that isn't a real config (some setups return an
+      // empty doc for the wrong page).
+      if (cfg && Array.isArray(cfg.lists) && cfg.lists.length > 0) {
+        resolvedPage = page; // fetchList must use the SAME page
+        configCache = { eventId, cfg, at: Date.now() };
+        return cfg;
+      }
     }
-    lastStatus = res.status;
+    lastStatus = res.status || lastStatus;
   }
   throw new Error(
-    `RaceResult config: HTTP ${lastStatus} (tried pages: ${PAGE_CANDIDATES.join(", ")})`,
+    `RaceResult config: HTTP ${lastStatus} (tried no-page + pages: ${PAGE_CANDIDATES.join(", ")})`,
   );
 }
 
@@ -106,7 +112,8 @@ async function fetchList(
 
   const url =
     `${RR_BASE}/${eventId}/RRPublish/data/list?key=${encodeURIComponent(key)}` +
-    `&listname=${encodeURIComponent(list.Name)}&page=${encodeURIComponent(resolvedPage)}` +
+    `&listname=${encodeURIComponent(list.Name)}` +
+    (resolvedPage ? `&page=${encodeURIComponent(resolvedPage)}` : "") +
     `&contest=${list.Contest}&r=all&l=0`;
   const promise = (async () => {
     const res = await fetch(url, { cache: "no-store" });
